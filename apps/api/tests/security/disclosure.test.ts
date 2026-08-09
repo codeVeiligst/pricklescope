@@ -170,7 +170,10 @@ suite('nothing discloses a secret', () => {
   it('an unhandled failure says nothing beyond a request id', async () => {
     // QuestDB is not configured in this harness, so a graph read fails inside
     // the service — the realistic route to a leaked internal message.
-    const response = await harness.as(harness.viewer, { method: 'GET', url: '/api/v1/graphs/fleet' })
+    const response = await harness.as(harness.viewer, {
+      method: 'GET',
+      url: '/api/v1/graphs/fleet',
+    })
     if (response.statusCode >= 500) {
       expect(response.json()).toMatchObject({
         error: 'internal_error',
@@ -199,7 +202,8 @@ suite('nothing discloses a secret', () => {
     // The list is easy to forget when a schema gains a field. This holds it to
     // what the contracts actually declare.
     const paths = new Set<string>(LOG_REDACT_PATHS)
-    const secretish = /^(password|currentPassword|newPassword|community|authPassword|privacyPassword|clientSecret|apiKey|refreshToken|secret|token|deliveryToken)$/
+    const secretish =
+      /^(password|currentPassword|newPassword|community|authPassword|privacyPassword|clientSecret|apiKey|refreshToken|secret|token|deliveryToken)$/
 
     const missing: string[] = []
     const walk = (node: unknown, depth = 0): void => {

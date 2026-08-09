@@ -205,9 +205,9 @@ suite('browser-facing protections', () => {
 
     it('a role change takes effect on the next request, without a new session', async () => {
       const session = await harness.disposableSession(harness.operator)
-      expect(
-        (await harness.as(session, { method: 'GET', url: '/api/v1/users' })).statusCode,
-      ).toBe(403)
+      expect((await harness.as(session, { method: 'GET', url: '/api/v1/users' })).statusCode).toBe(
+        403,
+      )
 
       await harness.metadata.db
         .updateTable('users')

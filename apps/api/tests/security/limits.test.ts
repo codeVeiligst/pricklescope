@@ -40,10 +40,9 @@ suite('resource ceilings', () => {
         statuses.push(response.statusCode)
         if (response.statusCode === 429) break
       }
-      expect(
-        statuses.at(-1),
-        `the graph route never throttled in ${statuses.length} calls`,
-      ).toBe(429)
+      expect(statuses.at(-1), `the graph route never throttled in ${statuses.length} calls`).toBe(
+        429,
+      )
       // 120 a minute: a dashboard redrawing cannot reach it, a script can.
       expect(statuses.length).toBeLessThanOrEqual(125)
       expect(statuses.length).toBeGreaterThan(100)

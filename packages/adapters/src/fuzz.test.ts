@@ -72,7 +72,8 @@ function check(random: () => number, index: number): TelegrafCheckDesiredState {
     target: 'device.example',
     port: 161,
     transport: 'udp4',
-    siteId: random() < 0.5 ? null : `00000000-0000-4000-8000-${String(index + 2).padStart(12, '0')}`,
+    siteId:
+      random() < 0.5 ? null : `00000000-0000-4000-8000-${String(index + 2).padStart(12, '0')}`,
     tags: Array.from({ length: Math.floor(random() * 3) }, () => hostileString(random)),
     intervalSeconds: 60,
     timeoutMs: 2000,
@@ -161,10 +162,9 @@ describe('rendering hostile input into Telegraf configuration', () => {
       // Compared against a benign render rather than a hand-written list, so a
       // new legitimate table cannot make this test stale, and an injected one
       // still shows up as a difference.
-      expect(
-        tableHeaders(content),
-        `iteration ${iteration} changed the set of tables`,
-      ).toEqual(expected)
+      expect(tableHeaders(content), `iteration ${iteration} changed the set of tables`).toEqual(
+        expected,
+      )
 
       // Every rendered value has to be a complete, self-contained literal. Counting
       // quotes is not enough — a value ending in a backslash makes that ambiguous
