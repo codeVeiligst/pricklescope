@@ -53,6 +53,11 @@ jobs:
           package-manager-cache: false
       - run: corepack enable
       - run: corepack pnpm install --frozen-lockfile --config.minimumReleaseAge=0
+      # Type-aware lint rules resolve @pricklescope/* through each package's
+      # dist/. Without this every cross-package type is an error type and eslint
+      # reports thousands of failures that say nothing about the code.
+      - name: Build the workspace packages
+        run: corepack pnpm build
 
       - name: Lint
         run: corepack pnpm lint

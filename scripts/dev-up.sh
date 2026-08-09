@@ -160,8 +160,18 @@ if [[ "${mode}" == "infra" ]]; then
   exit 0
 fi
 
-step "Applying migrations"
+step "Building the workspace packages"
 cd "${repo_dir}"
+# `apps/*` import the dist/ output of these four, not their sources, and the
+# migration CLI below is the first thing to need it. On a fresh clone that output
+# does not exist yet, which made the documented quick start fail at migrations.
+corepack pnpm --filter @pricklescope/contracts --filter @pricklescope/db \
+  --filter @pricklescope/adapters --filter @pricklescope/ui \
+  --workspace-concurrency=1 build ||
+  die "The workspace packages did not build." "Run 'corepack pnpm build' to see the error in full."
+ok "contracts, db, adapters, and ui built"
+
+step "Applying migrations"
 corepack pnpm db:migrate ||
   die "Migrations failed." "Check that PostgreSQL is healthy and PRICKLESCOPE_DATABASE_URL in .env points at it."
 ok "Schema is current"

@@ -52,6 +52,7 @@ jobs:
           package-manager-cache: false
       - run: corepack enable
       - run: corepack pnpm install --frozen-lockfile --config.minimumReleaseAge=0
+      - run: corepack pnpm build
 
       # Nothing is published until every check a pull request faces has passed
       # against the tagged commit itself.
