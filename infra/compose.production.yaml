@@ -12,7 +12,11 @@ services:
     build:
       context: ..
       dockerfile: infra/Dockerfile.web
-    image: pricklescope/web:${PRICKLESCOPE_VERSION:-dev}
+    # Defaults to a local build name. Point PRICKLESCOPE_IMAGE_PREFIX at the
+    # registry to run the released images instead — see deployment.md. Without
+    # this the published images could not be used at all: the name was fixed,
+    # so following the documentation always rebuilt from source.
+    image: ${PRICKLESCOPE_IMAGE_PREFIX:-pricklescope}/web:${PRICKLESCOPE_VERSION:-dev}
     restart: unless-stopped
     depends_on:
       api:
@@ -34,7 +38,7 @@ services:
     build:
       context: ..
       dockerfile: infra/Dockerfile.api
-    image: pricklescope/api:${PRICKLESCOPE_VERSION:-dev}
+    image: ${PRICKLESCOPE_IMAGE_PREFIX:-pricklescope}/api:${PRICKLESCOPE_VERSION:-dev}
     restart: unless-stopped
     # Telegraf reads the rendered configuration the API writes, and that file is
     # mode 0600. Same uid on both containers is what makes it readable at all.

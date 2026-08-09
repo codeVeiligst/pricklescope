@@ -3,26 +3,58 @@
 # HTTPS, and the Grafana gateway under TLS. Development serves plain HTTP by
 # design, so none of this can be exercised there.
 #
-#   ./infra/verify-production-origin.sh
+#   ./infra/verify-production-origin.sh                          the fixture
+#   ./infra/verify-production-origin.sh --env-file infra/.env.production \
+#     --no-build                                                 your deployment
 #
-# Brings up the stack described by infra/.env.verification, runs the checks against
-# it, and leaves it running. Pass --down to stop it afterwards.
+# With no arguments it brings up the fixture stack described by
+# infra/.env.verification — deliberately weak passwords, kept separate from
+# infra/.env.production so a real deployment cannot inherit them, and
+# ./scripts/prod-up.sh refuses to start with values like these. It leaves the
+# stack running; pass --down to stop it afterwards.
 #
-# That file is a fixture with deliberately weak passwords, kept separate from
-# infra/.env.production so a real deployment cannot inherit them —
-# ./scripts/prod-up.sh refuses to start with values like these.
+# --env-file points the same checks at a deployment you already have, which is
+# what deployment.md's verification step means. --no-build goes with it: the
+# script used to rebuild unconditionally, so it could neither check a deployment
+# running published images nor avoid restarting the thing it was inspecting.
+#
+# It signs in as the bootstrap administrator, so run it before removing that
+# account.
 
 set -Eeuo pipefail
 
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 repo_dir="$(cd -- "${script_dir}/.." && pwd)"
 env_file="${script_dir}/.env.verification"
+build=1
+down=0
+args=()
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --env-file)
+      [[ -n "${2-}" ]] || { echo "--env-file needs a path" >&2; exit 2; }
+      env_file="$(cd -- "$(dirname -- "$2")" && pwd)/$(basename -- "$2")"
+      shift 2
+      ;;
+    --no-build) build=0; shift ;;
+    --down) down=1; shift ;;
+    *) args+=("$1"); shift ;;
+  esac
+done
+set -- "${args[@]+"${args[@]}"}"
+
 compose=(docker compose --env-file "${env_file}"
   --file "${script_dir}/compose.yaml"
   --file "${script_dir}/compose.production.yaml")
 
 if [[ ! -f "${env_file}" ]]; then
-  echo "Create ${env_file} from .env.production.example first." >&2
+  if [[ "${env_file}" == "${script_dir}/.env.verification" ]]; then
+    echo "Create ${env_file} from .env.production.example to run the fixture," >&2
+    echo "or check a deployment you already have:" >&2
+    echo "  $0 --env-file infra/.env.production --no-build" >&2
+  else
+    echo "No such environment file: ${env_file}" >&2
+  fi
   exit 1
 fi
 
@@ -45,9 +77,9 @@ admin_password="$(cat "${script_dir}/${secrets_dir#./}/bootstrap_admin_password"
 workspace="$(mktemp -d)"
 cleanup() {
   rm -rf "${workspace}"
-  if [[ "${1:-}" == "--down" ]]; then "${compose[@]}" down; fi
+  if [[ "${down}" -eq 1 ]]; then "${compose[@]}" down; fi
 }
-trap 'cleanup "${1:-}"' EXIT
+trap cleanup EXIT
 
 passed=0
 failed=0
@@ -76,8 +108,13 @@ refute() {
   fi
 }
 
-echo "Starting the production-like stack..."
-"${compose[@]}" up --detach --build --wait --wait-timeout 300 >/dev/null
+if [[ "${build}" -eq 1 ]]; then
+  echo "Starting the production-like stack..."
+  "${compose[@]}" up --detach --build --wait --wait-timeout 300 >/dev/null
+else
+  echo "Checking the running stack described by ${env_file}..."
+  "${compose[@]}" up --detach --no-build --wait --wait-timeout 300 >/dev/null
+fi
 
 # Caddy issues its own certificate for a local site address. Trust that root
 # rather than turning verification off, so the check proves TLS actually works.

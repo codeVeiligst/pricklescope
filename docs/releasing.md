@@ -128,8 +128,8 @@ git clone https://github.com/<owner>/pricklescope
 cd pricklescope
 cp infra/.env.production.example infra/.env.production
 # follow docs/deployment.md exactly, including the secrets steps
-./scripts/prod-up.sh
-./infra/verify-production-origin.sh
+./scripts/prod-up.sh --no-build   # the released images, not a local build
+./infra/verify-production-origin.sh --env-file infra/.env.production --no-build
 ```
 
 If a step is missing from the documentation you will find it here, which is the

@@ -112,7 +112,7 @@ collectors and confirm the rendered file is still accepted.
 | **Patch/minor** | Safe in place. Update the digest in `infra/Dockerfile.web`. |
 | **Major**       | Caddyfile syntax can change. Validate before deploying.     |
 | **Rollback**    | Put the old pin back and rebuild.                           |
-| **Watch**       | `./infra/verify-production-origin.sh` — all 24 assertions.  |
+| **Watch**       | The 24 origin assertions, against your own deployment.      |
 
 The certificate volume (`caddy-data`) holds the issued certificates and the local
 CA. Keep it across upgrades; losing it means every client sees a new certificate
@@ -149,7 +149,7 @@ image, not just build it.**
 ./scripts/prod-up.sh
 
 # 5. Verify
-./infra/verify-production-origin.sh
+./infra/verify-production-origin.sh --env-file infra/.env.production --no-build
 ./scripts/scan.sh
 
 # 6. Record it in docs/implementation.md

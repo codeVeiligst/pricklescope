@@ -103,11 +103,31 @@ configuration at mode 0600 and Telegraf has to read it.
 > Without it a restored database is unreadable; beside them, it defeats the point
 > of having a key at all.
 
-### 4. Start
+### 4. Choose where the images come from
+
+**The released images**, which is the normal case. Uncomment
+`PRICKLESCOPE_IMAGE_PREFIX` in `infra/.env.production` and set
+`PRICKLESCOPE_VERSION` to a published release. Verify the signatures before you
+run them — every release names its own command, and it fails on an image that
+this project's release workflow did not build:
 
 ```bash
-./scripts/prod-up.sh --check   # validate, change nothing
-./scripts/prod-up.sh           # build, start, report health
+cosign verify ghcr.io/codeveiligst/pricklescope/api:0.1.0 \
+  --certificate-identity-regexp '(?i)^https://github\.com/codeVeiligst/pricklescope/\.github/workflows/release\.yaml@refs/tags/v.+$' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+```
+
+**Or build them from this checkout**, which is the default: leave
+`PRICKLESCOPE_IMAGE_PREFIX` commented out. You then get whatever the working copy
+contains, which is right for a change you are testing and wrong for a
+deployment you intend to keep.
+
+### 5. Start
+
+```bash
+./scripts/prod-up.sh --check      # validate, change nothing
+./scripts/prod-up.sh --no-build   # released images: pull and start
+./scripts/prod-up.sh              # local build: build and start
 ```
 
 `--check` refuses rather than warns: an https origin that is not https, a site
@@ -115,10 +135,16 @@ address that disagrees with it, an example password, a secret file the API canno
 read, and the published example key are each a hard stop. Nothing starts until
 they are all fixed.
 
-### 5. Verify
+Use `--no-build` with the released images. Compose builds any image it cannot
+find whenever a build section exists, so without it a registry that is
+unreachable, or a version that does not exist, is silently replaced by a local
+build of this checkout — running something other than what you asked for, under
+the name of the thing you asked for.
+
+### 6. Verify
 
 ```bash
-./infra/verify-production-origin.sh
+./infra/verify-production-origin.sh --env-file infra/.env.production --no-build
 ```
 
 Twenty-four assertions against the real origin: HTTP redirects to HTTPS, the
@@ -127,12 +153,14 @@ served, `/grafana` without a session is 401 and with one carries the session's o
 identity, a client cannot supply its own identity headers, a foreign origin cannot
 mutate, and nothing but the gateway is published.
 
-That script uses its own fixture configuration (`infra/.env.verification`) with
-deliberately weak passwords. Point it at your real deployment by copying the
-script's `env_file` line, or read it as a template for the same checks with
-`curl`.
+It signs in as the bootstrap administrator, so run it before you remove that
+account in step 7.
 
-### 6. Sign in and finish setup
+Run with no arguments it uses its own fixture (`infra/.env.verification`,
+deliberately weak passwords) and builds a throwaway stack instead — useful for
+testing the checks themselves, not for checking your deployment.
+
+### 7. Sign in and finish setup
 
 Open `PRICKLESCOPE_APP_ORIGIN` and sign in as the bootstrap administrator. Then,
 in the application:
@@ -160,7 +188,7 @@ docker compose --env-file infra/.env.production \
 docker compose --env-file infra/.env.production \
   -f infra/compose.yaml -f infra/compose.production.yaml down
 
-# Restart after a configuration change
+# Restart after a configuration change, reusing the image already there
 ./scripts/prod-up.sh --no-build
 ```
 

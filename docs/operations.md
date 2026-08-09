@@ -139,7 +139,7 @@ docker compose --env-file infra/.env.production \
 ./infra/restore-test.sh /var/backups/pricklescope/$(date +%F)
 
 # Re-check the origin after any change to TLS, DNS, or the gateway
-./infra/verify-production-origin.sh
+./infra/verify-production-origin.sh --env-file infra/.env.production --no-build
 
 # Dependency and image advisories
 ./scripts/scan.sh

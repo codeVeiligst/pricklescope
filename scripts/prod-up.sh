@@ -173,8 +173,17 @@ compose=(docker compose --env-file "${env_file}"
 ok "Compose model is valid"
 
 step "Starting the stack"
+# --no-build has to say so to Compose, not merely omit --build. Compose builds
+# an image it cannot find whenever a build section exists, so omitting the flag
+# meant a missing released image was quietly replaced by a local build of
+# whatever this checkout happened to contain — the one substitution nobody would
+# notice and everybody would be misled by.
 build_args=()
-[[ "${build}" -eq 1 ]] && build_args+=(--build)
+if [[ "${build}" -eq 1 ]]; then
+  build_args+=(--build)
+else
+  build_args+=(--no-build)
+fi
 "${compose[@]}" up --detach --remove-orphans "${build_args[@]}" --wait --wait-timeout 300 ||
   die "Not every container became healthy." \
     "Inspect them with:
@@ -182,7 +191,9 @@ build_args=()
   docker compose --env-file ${env_file} -f infra/compose.yaml -f infra/compose.production.yaml logs --tail 50"
 
 step "Service health"
-"${compose[@]}" ps --format 'table {{.Service}}\t{{.Status}}\t{{.Publishers}}'
+# .Ports, not .Publishers: the latter is a slice, so the table header printed
+# "<no value>" and every row printed a Go struct.
+"${compose[@]}" ps --format 'table {{.Service}}\t{{.Status}}\t{{.Ports}}'
 
 published="$("${compose[@]}" ps --format '{{.Service}} {{.Publishers}}')"
 unexpected=0
@@ -200,6 +211,6 @@ step "Ready"
 note "PrickleScope   ${app_origin}"
 note "Grafana        ${app_origin}/grafana/  (through the authenticated gateway)"
 echo
-note "Verify the origin end to end:  ./infra/verify-production-origin.sh"
+note "Verify the origin end to end:  ./infra/verify-production-origin.sh --env-file ${env_file#"${repo_dir}/"} --no-build"
 note "Back up before you need to:    ./infra/backup.sh /path/to/backup"
 note "The credential key is not in any backup this project takes. Store it separately."
