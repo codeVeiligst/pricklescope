@@ -727,7 +727,14 @@ Defects found during verification:
 - [x] Test metadata, QuestDB, and Grafana restore procedures.
       `./infra/backup.sh` takes all three consistently; `./infra/restore-test.sh`
       restores each into throwaway containers and checks the data is really there.
-- [ ] Add controller and pipeline health dashboards and alerts.
+- [~] Add controller and pipeline health dashboards and alerts. **Dashboards
+  done**: the controller provisions a Pipeline health dashboard in Grafana
+  alongside Fleet overview, Interface detail, and Source detail, and its own
+  health is on System → Health plus `/health/live` and `/health/ready`.
+  **Alerts not done**: nothing watches the controller or the pipeline, so a
+  collector that stops writing or a dependency that drops is visible only to
+  someone looking. Confirmed 2026-08-09 against the live stack — the only
+  rule in Grafana was a user's own.
 - [x] Add upgrade and rollback documentation for every pinned component.
       [upgrades.md](upgrades.md), written in Milestone 10.
 - [x] Add end-to-end tests for the primary user journeys. 54 tests across the
