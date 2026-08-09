@@ -184,9 +184,18 @@ if [[ "${build}" -eq 1 ]]; then
 else
   build_args+=(--no-build)
 fi
+# The failure message names both causes. "Not every container became healthy" is
+# a true statement about an image that could not be pulled and a useless one:
+# the reason is a few lines above, in Compose's own output.
+unhealthy_hint="Inspect them with:"
+[[ "${build}" -eq 0 ]] && unhealthy_hint="If an image could not be pulled, the version or the registry prefix
+  in ${env_file} names something that does not exist — with --no-build
+  nothing is built to cover for it.
+
+  Otherwise inspect them with:"
 "${compose[@]}" up --detach --remove-orphans "${build_args[@]}" --wait --wait-timeout 300 ||
-  die "Not every container became healthy." \
-    "Inspect them with:
+  die "The stack did not come up." \
+    "${unhealthy_hint}
   docker compose --env-file ${env_file} -f infra/compose.yaml -f infra/compose.production.yaml ps
   docker compose --env-file ${env_file} -f infra/compose.yaml -f infra/compose.production.yaml logs --tail 50"
 

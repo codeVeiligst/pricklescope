@@ -26,7 +26,18 @@
 set -Eeuo pipefail
 
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-env_file="${PRICKLESCOPE_ENV_FILE:-${script_dir}/.env}"
+
+# Which stack to back up. This defaulted to .env — the development file — so on
+# a production host, which has .env.production and no .env, the command
+# deployment.md tells you to run failed outright. Production comes first
+# because that is where a backup means anything.
+if [[ -n "${PRICKLESCOPE_ENV_FILE:-}" ]]; then
+  env_file="${PRICKLESCOPE_ENV_FILE}"
+elif [[ -f "${script_dir}/.env.production" ]]; then
+  env_file="${script_dir}/.env.production"
+else
+  env_file="${script_dir}/.env"
+fi
 compose_file="${script_dir}/compose.yaml"
 backup_dir="${1:-}"
 
@@ -39,9 +50,12 @@ if [[ -e "${backup_dir}" ]]; then
   exit 2
 fi
 if [[ ! -f "${env_file}" ]]; then
-  echo "Missing ${env_file}; start the stack first." >&2
+  echo "Missing ${env_file}; start the stack first," >&2
+  echo "or name the environment explicitly:" >&2
+  echo "  PRICKLESCOPE_ENV_FILE=infra/.env.production $0 ${backup_dir}" >&2
   exit 2
 fi
+echo "Backing up the stack described by ${env_file}"
 
 setting() {
   local key="$1" fallback="${2-}" value
@@ -51,7 +65,6 @@ setting() {
 
 postgres_db="$(setting POSTGRES_DB pricklescope)"
 postgres_user="$(setting POSTGRES_USER pricklescope)"
-questdb_http_port="$(setting QUESTDB_HTTP_PORT 9000)"
 
 compose=(docker compose --env-file "${env_file}" --file "${compose_file}")
 
@@ -67,18 +80,24 @@ mkdir -p "${backup_dir}/postgres"
 echo "   $(du -h "${backup_dir}/postgres/${postgres_db}.dump" | cut -f1) written"
 
 echo "== QuestDB metrics"
+# From inside the container, not from the host. QuestDB's HTTP port is published
+# on 127.0.0.1 in development and not published at all in production, so a host
+# request worked on a developer's machine and failed on every deployment this
+# script exists for. Inside the container the port is always there.
 checkpoint_active=false
-questdb_url="http://127.0.0.1:${questdb_http_port}/exec"
+questdb_exec() {
+  "${compose[@]}" exec -T questdb \
+    curl --fail --silent --show-error --get \
+    --data-urlencode "query=$1" 'http://127.0.0.1:9000/exec' >/dev/null
+}
 release_checkpoint() {
   if [[ "${checkpoint_active}" == true ]]; then
-    curl --fail --silent --show-error --get \
-      --data-urlencode 'query=CHECKPOINT RELEASE' "${questdb_url}" >/dev/null
+    questdb_exec 'CHECKPOINT RELEASE'
     checkpoint_active=false
   fi
 }
 trap release_checkpoint EXIT
-curl --fail --silent --show-error --get \
-  --data-urlencode 'query=CHECKPOINT CREATE' "${questdb_url}" >/dev/null
+questdb_exec 'CHECKPOINT CREATE'
 checkpoint_active=true
 "${compose[@]}" cp questdb:/var/lib/questdb/. "${backup_dir}/questdb-root"
 release_checkpoint

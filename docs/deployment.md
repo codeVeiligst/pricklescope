@@ -201,6 +201,10 @@ project types that for you.
 ./infra/backup.sh /var/backups/pricklescope/$(date +%F)
 ```
 
+It backs up the stack described by `infra/.env.production` when that file exists,
+and `infra/.env` otherwise; `PRICKLESCOPE_ENV_FILE` names one explicitly. It
+prints which it chose before it starts.
+
 Three stores, three consistency requirements, handled for you: a logical dump for
 PostgreSQL, a `CHECKPOINT` for QuestDB, and a brief stop of Grafana because SQLite
 cannot be copied safely from under a running writer. Alert evaluation pauses for

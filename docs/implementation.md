@@ -1059,8 +1059,8 @@ Partial:
 - [x] Define the versioning scheme and document the release procedure.
 - [x] Create the first version tag and publish the corresponding container images.
 - [x] Produce the first release notes, including installation instructions, supported configurations, known limitations, security considerations, image digests, and upgrade or migration guidance.
-- [ ] Perform a clean installation using only the published documentation and release artifacts.
-- [~] Verify the production deployment, HTTPS, secure cookies, Grafana gateway, persistence, backup, restore, and rollback using the release candidate.
+- [x] Perform a clean installation using only the published documentation and release artifacts.
+- [x] Verify the production deployment, HTTPS, secure cookies, Grafana gateway, persistence, backup, restore, and rollback using the release candidate.
 - [ ] Publish the first versioned release only after all release gates have passed.
 
 Acceptance verification, 2026-08-09:
@@ -1182,6 +1182,72 @@ CI found two real defects on its first runs, which is the argument for having it
   is the third gate this milestone that fired too late or reported the wrong
   thing. The v0.1.0 draft was updated with the generated body; the workflow path
   that generates it is exercised at 0.1.1.
+
+- **The clean install found four defects the documentation could not have
+  revealed by being read.** `v0.1.0` was cloned from GitHub at the tag into a
+  directory outside this working copy and installed by following
+  [deployment.md](deployment.md) literally, on `https://localhost` with Caddy's
+  own CA. The stack came up — six containers healthy, only the gateway
+  published — and 24 of 24 origin assertions passed. Then:
+
+  1. **The published images were unreachable.** `compose.production.yaml` fixed
+     the name to `pricklescope/api:${PRICKLESCOPE_VERSION}`, so every documented
+     path built from source. The release artifacts could not be run at all by
+     anyone following the instructions. `PRICKLESCOPE_IMAGE_PREFIX` now chooses.
+  2. **`prod-up.sh --no-build` did not pass `--no-build` to Compose**, it merely
+     omitted `--build`. Compose builds any image it cannot find when a build
+     section exists — so an unreachable registry, or a version that does not
+     exist, would be quietly replaced by a local build of the checkout. The
+     deployment would run something other than what was asked for, under the
+     name of the thing that was asked for.
+  3. **The verification step could not verify the deployment.** It required a
+     Git-ignored `.env.verification` the documented steps never create, and ran
+     `up --build` unconditionally — so it always stood up its own fixture and
+     rebuilt the images it was meant to inspect. It now takes `--env-file` and
+     `--no-build`.
+  4. **`.env.production.example` shipped `PRICKLESCOPE_VERSION=1.0.0`.** A clean
+     install of 0.1.0 reported itself as 1.0.0 through the API and the interface.
+  5. **`backup.sh` could not back up a production deployment at all**, and this
+     is the worst of the six. It defaulted to `infra/.env` — the _development_
+     environment — which a production host does not have, so the command
+     [deployment.md](deployment.md) gives you failed on the first line. Worse,
+     the QuestDB checkpoint was issued to `http://127.0.0.1:9000`, the published
+     port. Development publishes it on loopback; production deliberately
+     publishes nothing but the gateway. So the metrics half of the backup was
+     unreachable by construction on every deployment the script exists for, and
+     worked perfectly on the machine it was written on. It now resolves
+     `.env.production` first and runs the checkpoint inside the container, where
+     the port always exists.
+  6. **The failure message named the wrong cause.** A pull that returns "not
+     found" is reported as "Not every container became healthy" — true, and
+     useless. It now names both possibilities and says that `--no-build` builds
+     nothing to cover for a bad version.
+
+  The fixes were then verified against that same live installation: images
+  pulled from the registry, started with `--no-build`, both containers reporting
+  the published digests
+  (`api@sha256:6923a1a5…`, `web@sha256:cef202b8…`), 24 of 24 assertions passing
+  without a rebuild, and the API reporting `0.1.0`. The full first-run flow was
+  exercised through the API — retention applied, Grafana reconciled to 6 managed
+  resources, credential, site and source created, Telegraf configuration
+  rendered at mode 0600 to the shared uid — and `GET /api/v1/sync` reported
+  `pendingCount: 0` across all four targets.
+
+  Backup, restore, and rollback were then exercised on that installation rather
+  than assumed. `backup.sh` took 76 KB of PostgreSQL, 3.0 GB of QuestDB under
+  `CHECKPOINT`, and 222 MB of Grafana; `restore-test.sh` passed 8 of 8 on it —
+  the controller's tables readable, 1 credential ciphertext still sealed, 974
+  measurement rows queryable, 4 dashboards restored. Rollback was tested by
+  pointing the deployment at a version that does not exist: it refused instead
+  of building a substitute, the running containers kept serving throughout, and
+  putting the version back left every source, credential, and metric in place.
+
+  Three of the six are the same defect as the release-signing failure: something
+  substituted or misreported where nobody would look. Two of them —
+  `PRICKLESCOPE_VERSION` and the backup's env file — had a correct value on the
+  development machine and a wrong one everywhere else, which is precisely the
+  class of bug that no amount of reading finds. That is what a clean install is
+  for.
 
 Two items are deliberately left open, and one is a judgement worth recording:
 

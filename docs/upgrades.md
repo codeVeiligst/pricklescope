@@ -132,6 +132,19 @@ built cleanly, scanned cleanly, and failed the moment a container started —
 `ls` showed the packages and Node could resolve none of them. **Always start the
 image, not just build it.**
 
+## Upgrading PrickleScope itself
+
+Change `PRICKLESCOPE_VERSION` in `infra/.env.production` and run
+`./scripts/prod-up.sh --no-build`. Rolling back is putting the old version back
+and running it again; the volumes are untouched either way, so the only thing to
+check first is whether the release notes mention a migration.
+
+A version that does not exist is refused, not substituted — and because nothing
+is replaced until the new images are in hand, the containers already running
+keep serving through a failed pull. Verified by pointing a deployment at a
+nonexistent version: it refused, the previous containers stayed up, and putting
+the version back left every source, credential, and metric in place.
+
 ## Applying an upgrade
 
 ```bash
@@ -146,7 +159,7 @@ image, not just build it.**
 ./scripts/prod-up.sh --check
 
 # 4. Start
-./scripts/prod-up.sh
+./scripts/prod-up.sh --no-build   # released images; omit for a local build
 
 # 5. Verify
 ./infra/verify-production-origin.sh --env-file infra/.env.production --no-build
