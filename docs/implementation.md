@@ -1057,7 +1057,7 @@ Partial:
 - [x] Record build provenance and image digests in the release notes.
 - [~] Sign release tags and container images where practical.
 - [x] Define the versioning scheme and document the release procedure.
-- [ ] Create the first version tag and publish the corresponding container images.
+- [~] Create the first version tag and publish the corresponding container images.
 - [~] Produce the first release notes, including installation instructions, supported configurations, known limitations, security considerations, image digests, and upgrade or migration guidance.
 - [ ] Perform a clean installation using only the published documentation and release artifacts.
 - [~] Verify the production deployment, HTTPS, secure cookies, Grafana gateway, persistence, backup, restore, and rollback using the release candidate.
@@ -1126,18 +1126,41 @@ CI found two real defects on its first runs, which is the argument for having it
   about the application instead of about the fixture; it now throws and says
   where to look.
 
-Three items are deliberately left open, and one is a judgement worth recording:
+- **The release workflow published the images and then failed to sign them.** The
+  first `v0.1.0` run passed its gate, built and pushed `api` and `web` with their
+  provenance and SBOM attestations, and stopped at `cosign sign`:
+  `Error: signing [ghcr.io/codeVeiligst/pricklescope/api@sha256:41999e…]`. A
+  registry path must be lowercase; a GitHub owner name need not be.
+  `docker/metadata-action` lowercases what it is given, so the push was correct
+  while every hand-written reference to the same image was not — the two
+  spellings never had to agree, so nothing forced them to. The name is now
+  derived once, and `GITHUB_REPOSITORY` survives only where an _identity_ is
+  meant rather than an _address_: the signing certificate spells the repository
+  the way GitHub does.
+
+  Fixing it exposed a second fault in the same lines. The documented verify
+  command matched `https://github.com/<owner>/<repo>/.*` unanchored, which
+  accepts a signature produced by _any_ workflow in the repository — a weaker
+  check than it looked like. It is now anchored to the release workflow on a
+  version tag, and case-insensitive so the certificate's spelling cannot break
+  it. This is the same failure the Grafana drift badge had (D-040) and the same
+  one the CI guard had: a check that reports the wrong thing, which is worse than
+  no check, because it is believed.
+
+  [releasing.md](releasing.md) gained the recovery procedure. Steps 2 and 3 of
+  the workflow have already happened by the time step 4 can fail, so a failed run
+  leaves published images with no signature and no release — and the tag has to
+  move, which is only acceptable while nothing has been published under it.
+
+Two items are deliberately left open, and one is a judgement worth recording:
 
 - **The first version is 0.1.0, not 1.0.0.** Four Milestone 8 items are open —
   the controller's own health dashboards, end-to-end coverage of the primary
   journeys, the accessibility audit, and usability testing. A `1.0.0` would claim
   those were done.
-- **Create the first version tag**, **perform a clean installation from published
-  artifacts**, and **publish the release** all require a remote repository and a
-  registry, which is the owner's to create. The workflows are ready for it.
-- Signing, image publication from protected tags, and the release notes are
-  marked partial for the same reason: written and configured, unexercised until
-  there is somewhere to publish to.
+- **A clean installation from published artifacts** and **publishing the
+  release** are the two remaining gates. The draft release exists to be read by a
+  person before either happens.
 
 ## Feature overview
 
