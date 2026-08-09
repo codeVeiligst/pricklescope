@@ -72,8 +72,13 @@ jobs:
         run: |
           output=$(corepack pnpm test:integration 2>&1); status=$?
           echo "$output"
-          # A skipped suite is green and proves nothing. Fail if it did not run.
-          echo "$output" | grep -qE 'Tests +[1-9][0-9]* passed' || {
+          # A skipped suite is green and proves nothing, so fail if it did not
+          # run. ANSI codes are stripped first: vitest colourises, so the raw
+          # line is `Tests <esc>[22m <esc>[1m<esc>[32m14 passed` and a pattern
+          # expecting digits straight after "Tests" never matches. This guard
+          # failed a run in which all 14 tests had in fact passed.
+          plain=$(echo "$output" | sed 's/\x1b\[[0-9;]*m//g')
+          echo "$plain" | grep -qE 'Tests +[1-9][0-9]* passed' || {
             echo "::error::The integration suite did not execute — TEST_DATABASE_URL is probably unset."
             exit 1
           }
@@ -83,7 +88,8 @@ jobs:
         run: |
           output=$(corepack pnpm test:security 2>&1); status=$?
           echo "$output"
-          echo "$output" | grep -qE 'Tests +[1-9][0-9]* passed' || {
+          plain=$(echo "$output" | sed 's/\x1b\[[0-9;]*m//g')
+          echo "$plain" | grep -qE 'Tests +[1-9][0-9]* passed' || {
             echo "::error::The security suite did not execute — TEST_DATABASE_URL is probably unset."
             exit 1
           }
