@@ -730,7 +730,14 @@ Defects found during verification:
 - [ ] Add controller and pipeline health dashboards and alerts.
 - [x] Add upgrade and rollback documentation for every pinned component.
       [upgrades.md](upgrades.md), written in Milestone 10.
-- [ ] Add end-to-end tests for the primary user journeys.
+- [ ] Add end-to-end tests for the primary user journeys. **The existing suite is
+      not hermetic**, which CI exposed on its first run: 49 of 54 pass on a clean
+      environment and 5 fail because they need ambient data — a site tree, a
+      device, QuestDB metrics, and a configured Grafana. Those five have only
+      ever passed against a developer's own populated instance, so they were
+      proving less than they appeared to. This item now includes a fixture the
+      suite creates for itself; `docs/development.md` notes there is no loader
+      today.
 - [ ] Audit keyboard navigation, focus, contrast, reduced motion, responsive
       behavior, and WCAG 2.2 AA conformance.
 - [ ] Run task-based usability tests for adding a device, inventory, graphs,
@@ -1088,6 +1095,21 @@ Defects the audit found, which is what it is for:
   `.gitignore` excludes. Both links resolved locally and would have 404'd for
   anyone who cloned. `./scripts/check-docs.sh` now asks `git check-ignore` as well
   as the filesystem, so the class of problem cannot recur.
+
+CI found two real defects on its first runs, which is the argument for having it:
+
+- **The documented quick start was broken on a fresh clone.** `apps/*` import the
+  `dist/` output of the four packages; `pnpm dev` and `pnpm typecheck` build them
+  first, but `dev-up.sh` ran `db:migrate` before anything did. The migration CLI
+  could not resolve `@pricklescope/db`. The clean-checkout verification missed it
+  because it ran `pnpm build` by hand before the other commands, which is not what
+  the documentation tells anyone to do — it tested a path no reader would take.
+- **The end-to-end suite is not hermetic.** 49 of 54 pass on a clean environment;
+  5 need a site tree, a device, QuestDB metrics, and a configured Grafana. They
+  have only ever run against a developer's populated instance. Recorded against
+  the Milestone 8 item rather than patched here, because making them
+  self-sufficient is that item's work, not a CI fix — and narrowing CI to make it
+  green would be the wrong instinct entirely.
 
 Three items are deliberately left open, and one is a judgement worth recording:
 
