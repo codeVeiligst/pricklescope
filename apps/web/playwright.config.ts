@@ -4,6 +4,10 @@ const baseURL = process.env.PRICKLESCOPE_E2E_BASE_URL ?? 'http://localhost:5173'
 
 export default defineConfig({
   testDir: './tests/e2e',
+  // Seeds the world the suite assumes: QuestDB tables, Grafana dashboards, a
+  // device, and metrics for it. Five tests used to pass only on a machine that
+  // already had those, which CI exposed. Idempotent and additive.
+  globalSetup: './tests/e2e/global-setup.ts',
   fullyParallel: false,
   retries: 0,
   use: {
