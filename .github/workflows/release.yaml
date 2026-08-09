@@ -21,7 +21,6 @@ concurrency:
 
 env:
   REGISTRY: ghcr.io
-  PNPM_CONFIG_MINIMUM_RELEASE_AGE: '0'
 
 jobs:
   gate:
@@ -46,8 +45,13 @@ jobs:
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version-file: .nvmrc
+          # Off deliberately: this action detects `packageManager` in
+          # package.json and runs pnpm to find its store, which fails because
+          # corepack has not run yet — and corepack cannot run first, since
+          # this step replaces the Node whose bin directory holds the shims.
+          package-manager-cache: false
       - run: corepack enable
-      - run: corepack pnpm install --frozen-lockfile
+      - run: corepack pnpm install --frozen-lockfile --config.minimumReleaseAge=0
 
       # Nothing is published until every check a pull request faces has passed
       # against the tagged commit itself.

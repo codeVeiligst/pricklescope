@@ -21,11 +21,6 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
-env:
-  # Registry publish dates are not needed for a frozen-lockfile install, and the
-  # workspace's 24-hour hold would otherwise make CI depend on npm being up.
-  PNPM_CONFIG_MINIMUM_RELEASE_AGE: '0'
-
 jobs:
   verify:
     name: Lint, typecheck, and test
@@ -51,8 +46,13 @@ jobs:
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version-file: .nvmrc
+          # Off deliberately: this action detects `packageManager` in
+          # package.json and runs pnpm to find its store, which fails because
+          # corepack has not run yet — and corepack cannot run first, since
+          # this step replaces the Node whose bin directory holds the shims.
+          package-manager-cache: false
       - run: corepack enable
-      - run: corepack pnpm install --frozen-lockfile
+      - run: corepack pnpm install --frozen-lockfile --config.minimumReleaseAge=0
 
       - name: Lint
         run: corepack pnpm lint
@@ -95,8 +95,13 @@ jobs:
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version-file: .nvmrc
+          # Off deliberately: this action detects `packageManager` in
+          # package.json and runs pnpm to find its store, which fails because
+          # corepack has not run yet — and corepack cannot run first, since
+          # this step replaces the Node whose bin directory holds the shims.
+          package-manager-cache: false
       - run: corepack enable
-      - run: corepack pnpm install --frozen-lockfile
+      - run: corepack pnpm install --frozen-lockfile --config.minimumReleaseAge=0
       - name: Start the stack
         run: ./scripts/dev-up.sh --no-serve
       - name: Install the pinned browser
@@ -129,8 +134,13 @@ jobs:
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version-file: .nvmrc
+          # Off deliberately: this action detects `packageManager` in
+          # package.json and runs pnpm to find its store, which fails because
+          # corepack has not run yet — and corepack cannot run first, since
+          # this step replaces the Node whose bin directory holds the shims.
+          package-manager-cache: false
       - run: corepack enable
-      - run: corepack pnpm install --frozen-lockfile
+      - run: corepack pnpm install --frozen-lockfile --config.minimumReleaseAge=0
       - name: Advisories
         run: ./scripts/scan.sh
 
