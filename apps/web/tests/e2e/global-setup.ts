@@ -210,6 +210,19 @@ export default async function globalSetup(): Promise<void> {
         1.5, 64L, 0L
       from long_sequence(120)`)
 
+    // `latestSources` reads network_system, not network_availability — a device
+    // with availability samples and no system row is invisible to the fleet
+    // graph, which is exactly how this fixture failed the first time.
+    await questdb(`insert into network_system
+      (timestamp, ${identity}, sys_name, sys_description, sys_object_id, sys_uptime)
+      select timestamp_sequence('${from}', 60000000L),
+        ${identityValues},
+        '${FIXTURE.source}',
+        'End-to-end fixture device',
+        '1.3.6.1.4.1.99999.1',
+        cast(100000 + x * 60 as long)
+      from long_sequence(120)`)
+
     await questdb(`insert into network_interface_rate
       (timestamp, ${identity}, if_index, if_description,
        if_in_octets_per_second, if_out_octets_per_second,
@@ -224,15 +237,28 @@ export default async function globalSetup(): Promise<void> {
 
     // QuestDB's WAL applies asynchronously, so a query straight after the insert
     // can legitimately see nothing.
-    for (let attempt = 0; attempt < 30; attempt += 1) {
+    let visible = false
+    for (let attempt = 0; attempt < 45; attempt += 1) {
       const fleet = await api.get('/api/v1/graphs/fleet')
       if (fleet.ok()) {
         const { latestSources } = (await fleet.json()) as { latestSources: { sourceId: string }[] }
-        if (latestSources.some((entry) => entry.sourceId === source.id)) break
+        if (latestSources.some((entry) => entry.sourceId === source.id)) {
+          visible = true
+          break
+        }
       }
       await new Promise((resolve) => setTimeout(resolve, 1000))
     }
-    log('metrics written')
+    // Loudly, because the first version of this loop gave up quietly and still
+    // logged success — leaving a test to fail later with a message about the
+    // application rather than about the fixture that had not done its job.
+    if (!visible) {
+      throw new Error(
+        'the fixture wrote metrics but the fleet graph never reported the source. ' +
+          'Check that network_system received rows and that QuestDB applied its WAL.',
+      )
+    }
+    log('metrics written and visible to the fleet graph')
   }
 
   await api.dispose()
