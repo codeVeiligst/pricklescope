@@ -1044,21 +1044,21 @@ Partial:
 - [x] Confirm that source files, bundled assets, dependencies, fonts, icons, and screenshots can legally be published under the selected project license.
 - [x] Add appropriate root-level repository files, including `README.md`, `LICENSE`, `SECURITY.md`, `.gitignore`, and contribution guidance where applicable.
 - [x] Create the initial commit only after the repository-publication audit passes.
-- [~] Verify that the project can be cloned, built, tested, and started from a clean checkout.
+- [x] Verify that the project can be cloned, built, tested, and started from a clean checkout.
 - [~] Add GitHub Actions checks for tests, linting, security scanning, and container builds on pull requests.
-- [~] Add a GitHub Actions release workflow that builds the frontend and API container images from the tagged commit.
+- [x] Add a GitHub Actions release workflow that builds the frontend and API container images from the tagged commit.
 - [x] Confirm whether the frontend is an independent runtime image or a build artifact included in another image, and publish only the containers required by the documented architecture.
 - [x] Pin third-party GitHub Actions to trusted commit SHAs and configure minimal workflow permissions.
 - [x] Prevent pull-request workflows from receiving release credentials or publishing container images.
-- [~] Publish release images only from protected version tags or an explicitly approved release workflow.
+- [x] Publish release images only from protected version tags or an explicitly approved release workflow.
 - [x] Tag container images with the release version and immutable source revision; do not rely exclusively on `latest`.
 - [x] Run the dependency and container security checks established in Milestone 8 before publishing release images.
 - [x] Generate a software bill of materials for each released container image.
 - [x] Record build provenance and image digests in the release notes.
 - [~] Sign release tags and container images where practical.
 - [x] Define the versioning scheme and document the release procedure.
-- [~] Create the first version tag and publish the corresponding container images.
-- [~] Produce the first release notes, including installation instructions, supported configurations, known limitations, security considerations, image digests, and upgrade or migration guidance.
+- [x] Create the first version tag and publish the corresponding container images.
+- [x] Produce the first release notes, including installation instructions, supported configurations, known limitations, security considerations, image digests, and upgrade or migration guidance.
 - [ ] Perform a clean installation using only the published documentation and release artifacts.
 - [~] Verify the production deployment, HTTPS, secure cookies, Grafana gateway, persistence, backup, restore, and rollback using the release candidate.
 - [ ] Publish the first versioned release only after all release gates have passed.
@@ -1152,6 +1152,37 @@ CI found two real defects on its first runs, which is the argument for having it
   leaves published images with no signature and no release — and the tag has to
   move, which is only acceptable while nothing has been published under it.
 
+- **`v0.1.0` published on the second attempt, and the signatures were checked
+  rather than assumed.** Run `31326146770` on `75cf5aa` passed its gate, built,
+  pushed, and signed both images, attached six CycloneDX SBOMs, and opened the
+  draft. The published `cosign verify` command was then run locally against both
+  digests: both pass. It was also run against a deliberately wrong workflow and a
+  deliberately wrong OIDC issuer, and rejects each — a verification instruction
+  that cannot fail proves nothing.
+
+  ```text
+  ghcr.io/codeveiligst/pricklescope/api@sha256:6923a1a50b10bf6b6178250e1d88acb743cbcbfbc8059ae2e33523c2e6d424d2
+  ghcr.io/codeveiligst/pricklescope/web@sha256:cef202b8fbb9fcafa04afac7b5d6ad6ca0b9c23e21104bd3191e106be7102ff6
+  ```
+
+  The certificate subject is
+  `https://github.com/codeVeiligst/pricklescope/.github/workflows/release.yaml@refs/tags/v0.1.0`
+  — capital V, next to a lowercase registry path, in the same command. That is
+  the difference the first attempt tripped over, now visible in the artefact
+  itself.
+
+- **The release notes were the digests and nothing else.** The acceptance
+  criterion asks for installation, supported configurations, known limitations,
+  security considerations, digests, and upgrade guidance; `CHANGELOG.md` had all
+  of it and nothing read it. The body was shell inside the workflow, so the first
+  time it could be read was after a release had been drafted.
+  `scripts/release-notes.sh` now writes it from the `## <version>` section and
+  refuses when there is not one — and that refusal was moved into the **gate**,
+  because where the notes are written is after the images have been pushed. That
+  is the third gate this milestone that fired too late or reported the wrong
+  thing. The v0.1.0 draft was updated with the generated body; the workflow path
+  that generates it is exercised at 0.1.1.
+
 Two items are deliberately left open, and one is a judgement worth recording:
 
 - **The first version is 0.1.0, not 1.0.0.** Four Milestone 8 items are open —
@@ -1161,6 +1192,14 @@ Two items are deliberately left open, and one is a judgement worth recording:
 - **A clean installation from published artifacts** and **publishing the
   release** are the two remaining gates. The draft release exists to be read by a
   person before either happens.
+- **The Git tag is annotated, not signed**, which is why image and tag signing
+  stays partial. The images are signed keylessly and verifiable by anyone; a
+  signed tag needs a key the owner holds, and creating one to satisfy a checkbox
+  would be theatre. Reopen this if a second person ever gains push access.
+- **Pull-request checks are configured but never exercised by a pull request.**
+  Everything so far has gone to `main` directly. The workflow triggers on
+  `pull_request` and branch protection requires its four checks; that stays
+  partial until a pull request actually runs them.
 
 ## Feature overview
 
