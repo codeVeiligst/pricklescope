@@ -74,6 +74,13 @@ jobs:
           fi
           echo "version $declared"
 
+      # Here rather than where the notes are written, which is after the images
+      # have been pushed. A gate that fires after publishing is not a gate.
+      - name: The changelog must describe this version
+        run: |
+          ./scripts/release-notes.sh "${GITHUB_REF_NAME#v}" "${GITHUB_SHA}" \
+            "${GITHUB_REPOSITORY}" sha256:0 sha256:0 > /dev/null
+
   publish:
     name: Build, sign, and publish
     needs: gate
@@ -165,29 +172,18 @@ jobs:
           path: sbom/
           retention-days: 90
 
-      # The identity is anchored to this workflow and to a version tag, so a
-      # signature produced by any other workflow in the repository fails the
-      # check — the earlier unanchored pattern accepted all of them. It is
-      # case-insensitive because the certificate spells the repository the way
-      # GitHub does, which is not necessarily the way the registry does.
+      # The body is a script so it can be read and run before a tag is cut. The
+      # first v0.1.0 notes carried the digests and nothing else — no
+      # installation, no limitations, no security summary — and that was only
+      # visible after the release had been drafted.
       - name: Record what was published
         run: |
-          {
-            echo "## Published images"
-            echo
-            echo '```'
-            echo "${IMAGES}/api@${{ steps.api.outputs.digest }}"
-            echo "${IMAGES}/web@${{ steps.web.outputs.digest }}"
-            echo '```'
-            echo
-            echo "Built from \`${GITHUB_SHA}\`. Signed with cosign; verify with:"
-            echo
-            echo '```bash'
-            echo "cosign verify ${IMAGES}/api@${{ steps.api.outputs.digest }} \\"
-            echo "  --certificate-identity-regexp '(?i)^https://github\.com/${GITHUB_REPOSITORY}/\.github/workflows/release\.yaml@refs/tags/v.+\$' \\"
-            echo "  --certificate-oidc-issuer https://token.actions.githubusercontent.com"
-            echo '```'
-          } > release-body.md
+          ./scripts/release-notes.sh \
+            "${GITHUB_REF_NAME#v}" \
+            "${GITHUB_SHA}" \
+            "${GITHUB_REPOSITORY}" \
+            "${{ steps.api.outputs.digest }}" \
+            "${{ steps.web.outputs.digest }}" > release-body.md
           cat release-body.md >> "$GITHUB_STEP_SUMMARY"
 
       - uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2

@@ -76,7 +76,17 @@ The tag starts `.github/workflows/release.yaml`, which:
 4. Signs both with cosign, keylessly: the certificate comes from the workflow's
    own OIDC identity, so there is no signing key stored anywhere to leak.
 5. Attaches build provenance and a CycloneDX SBOM per image.
-6. Opens a **draft** release with the digests. You review and publish it.
+6. Opens a **draft** release. You review and publish it.
+
+The notes come from `scripts/release-notes.sh`, which reads the `## <version>`
+section of `CHANGELOG.md` and refuses if there is not one — checked in the gate,
+before anything is built, rather than when the notes are written. Run it yourself
+to see what a release will say:
+
+```bash
+./scripts/release-notes.sh 1.1.0 "$(git rev-parse HEAD)" <owner>/pricklescope \
+  sha256:0 sha256:0
+```
 
 The draft is deliberate. The last gate is a person reading what is about to go
 out.
