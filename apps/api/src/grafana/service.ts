@@ -30,6 +30,8 @@ function dashboards(publicPath: string): GrafanaDashboard[] {
 }
 
 export class GrafanaService {
+  private healthCache: { status: string; at: number } | null = null
+
   private operation: Promise<void> = Promise.resolve()
   private readonly tokenCrypto: GrafanaTokenCrypto
 
@@ -48,6 +50,14 @@ export class GrafanaService {
    * Whether applying would change Grafana. Builds the resource definitions the
    * reconciler would write and compares their hashes to what was last written, so
    * a dashboard edited inside Grafana and a dashboard changed here both show up.
+   *
+   * Hashes alone are not enough. The datasource password is deliberately excluded
+   * from its hash — a content hash of a secret is not something to keep in the
+   * metadata database — which left the one piece of state the comparison could
+   * not see. A stale password made every Grafana panel fail while this reported
+   * "6 managed resources are current", because the controller's own graphs use a
+   * different QuestDB account and kept working. So the datasource is measured
+   * rather than inferred, which is what D-025 asks for.
    */
   async pendingChange(): Promise<SyncProbe> {
     const settings = await this.store.get()
@@ -89,14 +99,73 @@ export class GrafanaService {
       password: questdbPassword,
     })
     const changed = definitions.filter((item) => stored.get(item.uid) !== item.contentHash)
+    if (changed.length > 0) {
+      return {
+        pending: true,
+        detail: `${changed.length} of ${definitions.length} managed resources differ`,
+        lastAppliedAt: appliedAt,
+        blocked: null,
+      }
+    }
+
+    // The hashes match, so ask Grafana whether the datasource actually works.
+    // Reporting this as pending rather than blocked is deliberate: a reconcile
+    // rewrites the datasource with the current credentials and would clear it,
+    // which is exactly the property a probe has to preserve.
+    const health = await this.dataSourceHealth()
+    if (health === 'unreachable') {
+      return {
+        pending: false,
+        detail: 'Grafana did not answer',
+        lastAppliedAt: appliedAt,
+        blocked: 'Grafana is unreachable',
+      }
+    }
+    if (health !== 'ok') {
+      return {
+        pending: true,
+        detail: `The QuestDB datasource is not working: ${health}`,
+        lastAppliedAt: appliedAt,
+        blocked: null,
+      }
+    }
+
     return {
-      pending: changed.length > 0,
-      detail: changed.length
-        ? `${changed.length} of ${definitions.length} managed resources differ`
-        : `${definitions.length} managed resources are current`,
+      pending: false,
+      detail: `${definitions.length} managed resources are current`,
       lastAppliedAt: appliedAt,
       blocked: null,
     }
+  }
+
+  /**
+   * The datasource's own verdict, cached briefly.
+   *
+   * Every open browser polls the sync endpoint, and each check reaches Grafana
+   * and then QuestDB. Reusing one answer for a few seconds keeps a badge that
+   * refreshes on a timer from turning into load on the store it is reporting on —
+   * the same reason the dependency sweep is cached.
+   */
+  private async dataSourceHealth(): Promise<string> {
+    const cached = this.healthCache
+    if (cached && Date.now() - cached.at < 10_000) return cached.status
+
+    let status: string
+    try {
+      const client = await this.managementClient(
+        this.config.grafana.internalUrl!,
+        await this.store.get(),
+      )
+      const result = await client.dataSourceHealth()
+      status =
+        result.status.toLowerCase() === 'ok'
+          ? 'ok'
+          : (result.message ?? 'the datasource reported an error')
+    } catch {
+      status = 'unreachable'
+    }
+    this.healthCache = { status, at: Date.now() }
+    return status
   }
 
   async overview(): Promise<GrafanaOverview> {

@@ -151,8 +151,19 @@ export class GrafanaApiClient {
     )
   }
 
-  dataSourceHealth(): Promise<GrafanaDataSourceHealth> {
-    return this.request(`/api/datasources/uid/${GRAFANA_DATASOURCE_UID}/health`)
+  /**
+   * The datasource's own verdict on whether it can reach QuestDB.
+   *
+   * Read tolerantly: Grafana answers 400 with a perfectly good body when the
+   * datasource cannot connect, and that is the answer this endpoint exists to
+   * give. Treating it as a transport failure turns "the password is wrong" into
+   * "Grafana is unreachable", which points at the wrong thing entirely.
+   */
+  async dataSourceHealth(): Promise<GrafanaDataSourceHealth> {
+    const body = await this.requestAnyStatus<GrafanaDataSourceHealth>(
+      `/api/datasources/uid/${GRAFANA_DATASOURCE_UID}/health`,
+    )
+    return body ?? { status: 'ERROR', message: 'Grafana returned no health payload' }
   }
 
   async ensureFolder(): Promise<void> {
@@ -260,6 +271,30 @@ export class GrafanaApiClient {
     } catch (error) {
       if (error instanceof GrafanaApiError && error.status === 404) return null
       throw error
+    }
+  }
+
+  /** Parses the body regardless of status, for endpoints whose job is to report failure. */
+  private async requestAnyStatus<T>(path: string): Promise<T | null> {
+    const headers = new Headers({ accept: 'application/json' })
+    if (this.authentication.kind === 'basic') {
+      headers.set(
+        'authorization',
+        `Basic ${Buffer.from(`${this.authentication.username}:${this.authentication.password}`).toString('base64')}`,
+      )
+    } else if (this.authentication.kind === 'bearer') {
+      headers.set('authorization', `Bearer ${this.authentication.token}`)
+    }
+    const baseUrl = `${this.baseUrl.replace(/\/+$/, '')}/`
+    const response = await this.fetchImplementation(new URL(path.replace(/^\/+/, ''), baseUrl), {
+      headers,
+      signal: AbortSignal.timeout(10_000),
+    })
+    const text = await response.text()
+    try {
+      return JSON.parse(text) as T
+    } catch {
+      return null
     }
   }
 
