@@ -81,6 +81,26 @@ The tag starts `.github/workflows/release.yaml`, which:
 The draft is deliberate. The last gate is a person reading what is about to go
 out.
 
+## When a release fails partway
+
+Steps 2 and 3 have already happened by the time step 4 can fail, so a failed run
+can leave images in the registry with no signature, no SBOM, and no release. That
+is what happened to the first `v0.1.0`: the images published and `cosign sign`
+rejected the name.
+
+The workflow is read from the tag, so fixing it means the tag has to move:
+
+```bash
+git push origin main                  # the fix, with CI green on it
+git tag -d v1.1.0 && git push origin :refs/tags/v1.1.0
+git tag -a v1.1.0 -m "PrickleScope 1.1.0" && git push origin v1.1.0
+```
+
+Moving a tag is only acceptable **while nothing has been published under it** —
+no release, no announcement, and no one able to pull. The re-run overwrites the
+registry's `1.1.0` tag with a new digest. Once a release exists, the version is
+spent: fix forward with the next patch number instead.
+
 ## Two images, not three
 
 The documented architecture has two containers this project builds: `api` and
@@ -111,11 +131,18 @@ with the release.
 
 ## Verifying a release, as a user
 
+Each release names its own command, with the digests filled in. It reads:
+
 ```bash
 cosign verify ghcr.io/<owner>/pricklescope/api@sha256:<digest> \
-  --certificate-identity-regexp 'https://github.com/<owner>/pricklescope/.*' \
+  --certificate-identity-regexp '(?i)^https://github\.com/<owner>/pricklescope/\.github/workflows/release\.yaml@refs/tags/v.+$' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```
+
+The registry path is lowercase whatever case the owner's name is written in, and
+the certificate is not — which is why the pattern is case-insensitive. It is
+anchored to the release workflow on a version tag, so a signature from any other
+workflow in the repository is rejected rather than accepted.
 
 The SBOMs are attached to the GitHub release and to each image.
 

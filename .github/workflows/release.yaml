@@ -95,13 +95,25 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # A registry path must be lowercase; an owner or repository name need not
+      # be. `docker/metadata-action` lowercases on its own, so the build and push
+      # worked while every hand-written reference to the same image did not — the
+      # v0.1.0 release failed here, at `cosign sign`, after publishing. Deriving
+      # the name once removes the chance for two spellings to disagree.
+      #
+      # GITHUB_REPOSITORY keeps its original case where an identity is meant
+      # rather than an address: the OIDC certificate records the repository as
+      # GitHub spells it.
+      - name: Image name
+        run: echo "IMAGES=${REGISTRY}/$(echo "${GITHUB_REPOSITORY}" | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_ENV"
+
       # Two images, because the documented architecture has two: the gateway
       # serves the built SPA, so the frontend is not a separate runtime image.
       - name: API tags
         id: api-meta
         uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
         with:
-          images: ${{ env.REGISTRY }}/${{ github.repository }}/api
+          images: ${{ env.IMAGES }}/api
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
@@ -122,7 +134,7 @@ jobs:
         id: web-meta
         uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
         with:
-          images: ${{ env.REGISTRY }}/${{ github.repository }}/web
+          images: ${{ env.IMAGES }}/web
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
@@ -142,8 +154,8 @@ jobs:
       - name: Sign the images
         uses: sigstore/cosign-installer@f713795cb21599bc4e5c4b58cbad1da852d7eeb9 # v3
       - run: |
-          cosign sign --yes "${REGISTRY}/${GITHUB_REPOSITORY}/api@${{ steps.api.outputs.digest }}"
-          cosign sign --yes "${REGISTRY}/${GITHUB_REPOSITORY}/web@${{ steps.web.outputs.digest }}"
+          cosign sign --yes "${IMAGES}/api@${{ steps.api.outputs.digest }}"
+          cosign sign --yes "${IMAGES}/web@${{ steps.web.outputs.digest }}"
 
       - name: Software bill of materials
         run: ./scripts/sbom.sh "${GITHUB_WORKSPACE}/sbom"
@@ -153,21 +165,26 @@ jobs:
           path: sbom/
           retention-days: 90
 
+      # The identity is anchored to this workflow and to a version tag, so a
+      # signature produced by any other workflow in the repository fails the
+      # check — the earlier unanchored pattern accepted all of them. It is
+      # case-insensitive because the certificate spells the repository the way
+      # GitHub does, which is not necessarily the way the registry does.
       - name: Record what was published
         run: |
           {
             echo "## Published images"
             echo
             echo '```'
-            echo "${REGISTRY}/${GITHUB_REPOSITORY}/api@${{ steps.api.outputs.digest }}"
-            echo "${REGISTRY}/${GITHUB_REPOSITORY}/web@${{ steps.web.outputs.digest }}"
+            echo "${IMAGES}/api@${{ steps.api.outputs.digest }}"
+            echo "${IMAGES}/web@${{ steps.web.outputs.digest }}"
             echo '```'
             echo
             echo "Built from \`${GITHUB_SHA}\`. Signed with cosign; verify with:"
             echo
             echo '```bash'
-            echo "cosign verify ${REGISTRY}/${GITHUB_REPOSITORY}/api@${{ steps.api.outputs.digest }} \\"
-            echo "  --certificate-identity-regexp 'https://github.com/${GITHUB_REPOSITORY}/.*' \\"
+            echo "cosign verify ${IMAGES}/api@${{ steps.api.outputs.digest }} \\"
+            echo "  --certificate-identity-regexp '(?i)^https://github\.com/${GITHUB_REPOSITORY}/\.github/workflows/release\.yaml@refs/tags/v.+\$' \\"
             echo "  --certificate-oidc-issuer https://token.actions.githubusercontent.com"
             echo '```'
           } > release-body.md
