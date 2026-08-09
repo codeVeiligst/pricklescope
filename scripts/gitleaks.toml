@@ -1,0 +1,33 @@
+# gitleaks configuration for PrickleScope.
+#
+# Extends the bundled ruleset rather than replacing it, so every default detector
+# stays on and this file only says what not to look at.
+#
+# The scan runs with `--no-git`, because this working copy is not a repository
+# yet (Milestone 11). A filesystem scan sees local files that Git never will, so
+# the paths ignored below are exactly the ones `.gitignore` excludes. Once there
+# is history, that scan is the authoritative one and these exclusions should be
+# rechecked against what was actually committed.
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Local state that is git-ignored and never committed"
+paths = [
+  # Real development credentials, created from the examples at first start.
+  '''(^|/)\.env$''',
+  '''(^|/)infra/\.env$''',
+  '''(^|/)infra/\.env\.production$''',
+  # The credential key and bootstrap password for a local production-like run.
+  '''(^|/)infra/secrets/''',
+  # Rendered collector configuration, written 0600 with injected SNMP secrets.
+  '''(^|/)infra/runtime/''',
+  '''(^|/)infra/runtime-prodtest/''',
+  # Installed and built output.
+  '''node_modules''',
+  '''(^|/)dist/''',
+  '''pnpm-lock\.yaml$''',
+  '''(^|/)test-results/''',
+  '''(^|/)playwright-report/''',
+]

@@ -1,0 +1,45 @@
+# PrickleScope web: the built SPA and the same-origin gateway that fronts it.
+#
+# One origin serves three things: the application shell, `/api` and `/health` on
+# the Fastify API, and `/grafana`. The last one goes to the API rather than
+# straight to Grafana on purpose — the API is what checks the session and
+# reconstructs the Auth Proxy identity headers. Caddy's job is TLS, static files,
+# and refusing to let a client supply those headers itself.
+
+FROM node:24.19.0-alpine@sha256:d32cdf619f63fe0471182d08996dd516c6275bb5fd31ae06e55a570bd9e1ad43 AS build
+
+ENV PNPM_HOME=/pnpm
+ENV PATH="${PNPM_HOME}:${PATH}"
+WORKDIR /app
+
+RUN corepack enable
+
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
+COPY apps/api/package.json apps/api/
+COPY apps/web/package.json apps/web/
+COPY packages/contracts/package.json packages/contracts/
+COPY packages/db/package.json packages/db/
+COPY packages/adapters/package.json packages/adapters/
+COPY packages/ui/package.json packages/ui/
+
+RUN corepack pnpm install --frozen-lockfile --config.minimumReleaseAge=0
+
+COPY tsconfig.base.json ./
+COPY packages packages
+COPY apps/web apps/web
+
+RUN corepack pnpm --filter @pricklescope/contracts \
+      --filter @pricklescope/ui \
+      --workspace-concurrency=1 run build \
+  && corepack pnpm --filter @pricklescope/web run build
+
+FROM caddy:2.11.4-alpine@sha256:5f5c8640aae01df9654968d946d8f1a56c497f1dd5c5cda4cf95ab7c14d58648 AS runtime
+
+COPY --from=build /app/apps/web/dist /srv
+COPY infra/config/caddy/Caddyfile /etc/caddy/Caddyfile
+
+EXPOSE 80 443
+
+# The unpublished plain-HTTP listener the Caddyfile defines for exactly this.
+HEALTHCHECK --interval=10s --timeout=5s --start-period=20s --retries=6 \
+  CMD wget --quiet --spider http://127.0.0.1:2020/healthz || exit 1

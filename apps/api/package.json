@@ -1,0 +1,43 @@
+{
+  "name": "@pricklescope/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/server.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "db:bootstrap": "tsx src/cli/bootstrap.ts",
+    "db:migrate": "tsx src/cli/migrate.ts",
+    "dev": "tsx watch --clear-screen=false src/server.ts",
+    "start": "node dist/server.js",
+    "storage:benchmark": "tsx src/cli/storage-benchmark.ts",
+    "test": "vitest run src",
+    "test:integration": "vitest run tests/integration",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test:security": "vitest run tests/security --no-file-parallelism"
+  },
+  "dependencies": {
+    "@fastify/cookie": "11.1.2",
+    "@fastify/helmet": "13.1.0",
+    "@fastify/http-proxy": "11.6.0",
+    "@fastify/rate-limit": "11.2.0",
+    "@fastify/swagger": "9.8.1",
+    "@fastify/type-provider-typebox": "6.1.0",
+    "@node-rs/argon2": "2.0.2",
+    "@pricklescope/adapters": "workspace:*",
+    "@pricklescope/contracts": "workspace:*",
+    "@pricklescope/db": "workspace:*",
+    "@sinclair/typebox": "0.34.52",
+    "dotenv": "17.4.2",
+    "fastify": "5.11.2",
+    "kysely": "0.29.4",
+    "openid-client": "6.8.4",
+    "pg": "8.22.0"
+  },
+  "devDependencies": {
+    "@types/node": "24.13.3",
+    "@types/pg": "8.20.3",
+    "tsx": "4.23.5",
+    "vitest": "4.1.10"
+  }
+}

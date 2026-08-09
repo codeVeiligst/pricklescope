@@ -1,0 +1,44 @@
+{
+  "name": "pricklescope",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.20.0",
+  "engines": {
+    "node": ">=24.19.0 <25",
+    "pnpm": ">=11 <12"
+  },
+  "scripts": {
+    "build": "corepack pnpm --recursive --workspace-concurrency=1 run build",
+    "dev": "corepack pnpm --filter @pricklescope/contracts --filter @pricklescope/db --filter @pricklescope/adapters --filter @pricklescope/ui build && concurrently --kill-others --names api,web --prefix-colors green,cyan \"corepack pnpm --filter @pricklescope/api dev\" \"corepack pnpm --filter @pricklescope/web dev\"",
+    "dev:up": "bash scripts/dev-up.sh",
+    "prod:up": "bash scripts/prod-up.sh",
+    "db:bootstrap": "corepack pnpm --filter @pricklescope/api db:bootstrap",
+    "db:migrate": "corepack pnpm --filter @pricklescope/api db:migrate",
+    "storage:benchmark": "corepack pnpm --filter @pricklescope/api storage:benchmark",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "lint": "eslint . --max-warnings=0",
+    "scan": "bash scripts/scan.sh",
+    "scan:deps": "bash scripts/scan.sh deps",
+    "security-scan": "bash scripts/security-scan.sh",
+    "sbom": "bash scripts/sbom.sh",
+    "docs:check": "bash scripts/check-docs.sh",
+    "test": "corepack pnpm --recursive run test",
+    "test:integration": "corepack pnpm --filter @pricklescope/api test:integration",
+    "test:security": "corepack pnpm --filter @pricklescope/api test:security",
+    "test:e2e": "corepack pnpm --filter @pricklescope/web test:e2e",
+    "typecheck": "corepack pnpm --filter @pricklescope/contracts --filter @pricklescope/db --filter @pricklescope/adapters --filter @pricklescope/ui build && corepack pnpm --recursive --workspace-concurrency=1 run typecheck"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "concurrently": "10.0.4",
+    "eslint": "10.8.0",
+    "eslint-plugin-react-hooks": "7.1.1",
+    "eslint-plugin-react-refresh": "0.5.3",
+    "globals": "17.9.0",
+    "prettier": "3.9.6",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.66.0"
+  }
+}

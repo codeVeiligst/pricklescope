@@ -1,0 +1,28 @@
+{
+  "name": "@pricklescope/db",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run --passWithNoTests",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@pricklescope/contracts": "workspace:*",
+    "kysely": "0.29.4",
+    "pg": "8.22.0"
+  },
+  "devDependencies": {
+    "@types/pg": "8.20.3",
+    "vitest": "4.1.10"
+  }
+}

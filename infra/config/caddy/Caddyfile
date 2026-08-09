@@ -1,0 +1,79 @@
+# The one origin PrickleScope is served on.
+#
+# `PRICKLESCOPE_SITE_ADDRESS` is the public name, and it alone decides how TLS is
+# handled — Caddy has no separate switch:
+#
+#   pricklescope.example.com   a public certificate over ACME
+#   localhost                  a certificate from Caddy's own local CA
+#   :80                        plain HTTP, for terminating TLS somewhere else
+#
+# Automatic HTTPS is on by default and turns itself off for a bare port.
+
+{
+	# Nothing outside the container needs to reconfigure Caddy at runtime.
+	admin off
+}
+
+# The container health check, on a port that is never published. It exists
+# because the real site cannot be probed from inside: its certificate is issued
+# for the configured name, and dialling 127.0.0.1 presents no matching SNI. A
+# bare port means plain HTTP with no certificate involved, and a response here
+# still proves Caddy parsed its configuration and is serving.
+:2020 {
+	respond /healthz "ok" 200
+	respond 404
+}
+
+{$PRICKLESCOPE_SITE_ADDRESS:localhost} {
+	encode zstd gzip
+
+	# Grafana Auth Proxy trusts these headers. The API reconstructs them from the
+	# PrickleScope session, so a client must never be able to supply its own — the
+	# API deletes them too, and neither guard is the only one.
+	request_header -X-WEBAUTH-USER
+	request_header -X-WEBAUTH-ROLE
+	request_header -X-WEBAUTH-NAME
+	request_header -X-WEBAUTH-EMAIL
+	request_header -X-Grafana-Org-Id
+
+	# `/grafana` deliberately goes to the API, not to Grafana: the API is what
+	# checks the session before proxying and what injects the identity headers.
+	# Grafana itself is not published at all.
+	handle /api/* {
+		reverse_proxy api:3001
+	}
+
+	handle /health/* {
+		reverse_proxy api:3001
+	}
+
+	handle /grafana/* {
+		reverse_proxy api:3001
+	}
+
+	# The application shell. Everything else is a client-side route, so unknown
+	# paths return index.html rather than a 404.
+	handle {
+		root * /srv
+		try_files {path} /index.html
+		file_server
+
+		header {
+			# The SPA loads nothing from anywhere else. Grafana's own responses come
+			# through the /api handler above and keep their own headers untouched.
+			Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'"
+			Strict-Transport-Security "max-age=31536000; includeSubDomains"
+			X-Content-Type-Options "nosniff"
+			Referrer-Policy "same-origin"
+			Cross-Origin-Opener-Policy "same-origin"
+			Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=()"
+			-Server
+		}
+
+		# Vite fingerprints its assets, so they are immutable; the shell is not.
+		@immutable path /assets/*
+		header @immutable Cache-Control "public, max-age=31536000, immutable"
+		@shell path / /index.html
+		header @shell Cache-Control "no-cache"
+	}
+}

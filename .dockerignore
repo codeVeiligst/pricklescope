@@ -1,0 +1,24 @@
+# The image builds from source; anything generated, installed, or secret stays out.
+**/node_modules
+**/dist
+**/.turbo
+**/coverage
+**/test-results
+**/playwright-report
+
+.env
+.env.*
+!.env.example
+infra/.env
+infra/.env.*
+!infra/.env.example
+!infra/.env.production.example
+
+# Rendered Telegraf configuration carries injected SNMP credentials and is
+# produced at runtime into a mounted volume, never baked into an image.
+infra/runtime
+
+.git
+.gitignore
+*.md
+!README.md

@@ -1,0 +1,24 @@
+# Static-analysis and secret-scanning findings that ./scripts/security-scan.sh
+# reports but does not fail on. One rule id per line, each with the reason and
+# what would make it apply again.
+
+# Semgrep wants `min-release-age` in .npmrc.
+#
+# That is an npm 11.10 setting. This workspace is pnpm-only — `packageManager`
+# pins it, corepack runs it, and the equivalent control is `minimumReleaseAge` in
+# pnpm-workspace.yaml, which is set. Adding an npm setting nothing reads would be
+# a comment pretending to be a control.
+#
+# Revisit if the project ever supports installing with npm.
+npm-missing-minimum-release-age
+
+# Semgrep wants `minimumReleaseAge: 10080` (seven days); the project sets 1440
+# (one day).
+#
+# This is a deliberate project policy recorded in CLAUDE.md, not an oversight. One
+# day already stops the same-day-publish attacks the setting exists for, while
+# seven would delay every routine patch — including security patches — by a week.
+#
+# Revisit with the owner; raising it is a one-line change if they want the
+# stricter posture.
+pnpm-minimum-release-age

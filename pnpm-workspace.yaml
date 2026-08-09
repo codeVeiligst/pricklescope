@@ -1,0 +1,22 @@
+packages:
+  - apps/*
+  - packages/*
+
+minimumReleaseAge: 1440
+
+# Supply-chain settings, added after a SAST pass flagged their absence.
+# A transitive dependency may only come from the registry, never a git or http
+# URL, and an update may not quietly relax either of these.
+blockExoticSubdeps: true
+trustPolicy: no-downgrade
+# semver 6 is a build-time-only pin that Babel has carried for years, reached
+# only through eslint-plugin-react-hooks. It sits beside semver 7 in the tree,
+# which is what the policy reads as a downgrade. Neither container ships it: the
+# API image installs production dependencies only, and the web image ships built
+# assets. Reviewed 2026-08-08; revisit if Babel stops depending on it.
+trustPolicyExclude:
+  - semver@6.3.1
+
+allowBuilds:
+  '@node-rs/argon2': true
+  esbuild: true

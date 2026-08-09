@@ -1,0 +1,118 @@
+# Production overlay. Use with the base file, never on its own:
+#
+#   docker compose --env-file infra/.env.production \
+#     -f infra/compose.yaml -f infra/compose.production.yaml up -d
+#
+# What it changes: the application itself joins the stack, and every backing
+# service stops being published. In development each engine is bound to
+# 127.0.0.1 so it can be inspected; in production the gateway is the only way in.
+
+services:
+  web:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.web
+    image: pricklescope/web:${PRICKLESCOPE_VERSION:-dev}
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      PRICKLESCOPE_SITE_ADDRESS: ${PRICKLESCOPE_SITE_ADDRESS:-localhost}
+    ports:
+      - '${PRICKLESCOPE_HTTP_PORT:-80}:80'
+      - '${PRICKLESCOPE_HTTPS_PORT:-443}:443'
+    volumes:
+      # Issued certificates and the local CA. Losing this volume means every
+      # client sees a new certificate authority.
+      - caddy-data:/data
+      - caddy-config:/config
+    networks:
+      - monitoring
+
+  api:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.api
+    image: pricklescope/api:${PRICKLESCOPE_VERSION:-dev}
+    restart: unless-stopped
+    # Telegraf reads the rendered configuration the API writes, and that file is
+    # mode 0600. Same uid on both containers is what makes it readable at all.
+    user: '${TELEGRAF_UID:-1000}:${TELEGRAF_GID:-1000}'
+    depends_on:
+      postgres:
+        condition: service_healthy
+      questdb:
+        condition: service_healthy
+      grafana:
+        condition: service_healthy
+    environment:
+      PRICKLESCOPE_NODE_ENV: production
+      PRICKLESCOPE_VERSION: ${PRICKLESCOPE_VERSION:-0.0.0-dev}
+      PRICKLESCOPE_HOST: 0.0.0.0
+      PRICKLESCOPE_API_PORT: '3001'
+      PRICKLESCOPE_APP_ORIGIN: ${PRICKLESCOPE_APP_ORIGIN:?Set the public HTTPS origin}
+      # Behind the gateway every request arrives from Caddy. Without this the
+      # rate limiter would count the whole installation as one client.
+      PRICKLESCOPE_TRUST_PROXY: 'true'
+      PRICKLESCOPE_COOKIE_SECURE: 'true'
+      PRICKLESCOPE_DATABASE_URL: postgresql://${POSTGRES_USER:-pricklescope}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-pricklescope}
+      PRICKLESCOPE_AUTO_MIGRATE: ${PRICKLESCOPE_AUTO_MIGRATE:-true}
+      PRICKLESCOPE_RUN_JOBS: 'true'
+      PRICKLESCOPE_CREDENTIAL_KEY_FILE: /run/secrets/credential_key
+      PRICKLESCOPE_CREDENTIAL_KEY_VERSION: ${PRICKLESCOPE_CREDENTIAL_KEY_VERSION:-1}
+      PRICKLESCOPE_BOOTSTRAP_ADMIN_USERNAME: ${PRICKLESCOPE_BOOTSTRAP_ADMIN_USERNAME:-}
+      PRICKLESCOPE_BOOTSTRAP_ADMIN_PASSWORD_FILE: /run/secrets/bootstrap_admin_password
+      PRICKLESCOPE_BOOTSTRAP_ADMIN_DISPLAY_NAME: ${PRICKLESCOPE_BOOTSTRAP_ADMIN_DISPLAY_NAME:-PrickleScope Administrator}
+      PRICKLESCOPE_TELEGRAF_CONFIG_DIR: /etc/telegraf/runtime
+      PRICKLESCOPE_QUESTDB_DATABASE_URL: postgresql://${QUESTDB_CONTROLLER_USER:-pricklescope_controller}:${QUESTDB_CONTROLLER_PASSWORD:?Set QUESTDB_CONTROLLER_PASSWORD}@questdb:8812/qdb
+      PRICKLESCOPE_QUESTDB_HEALTH_URL: http://questdb:9003/
+      PRICKLESCOPE_GRAFANA_URL: http://grafana:3000/grafana/
+      PRICKLESCOPE_GRAFANA_HEALTH_URL: http://grafana:3000/grafana/api/health
+      PRICKLESCOPE_GRAFANA_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      PRICKLESCOPE_GRAFANA_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?Set GRAFANA_ADMIN_PASSWORD}
+      PRICKLESCOPE_GRAFANA_QUESTDB_SERVER: questdb
+      PRICKLESCOPE_GRAFANA_QUESTDB_PORT: '8812'
+      PRICKLESCOPE_GRAFANA_QUESTDB_USER: ${QUESTDB_GRAFANA_USER:-grafana}
+      PRICKLESCOPE_GRAFANA_QUESTDB_PASSWORD: ${QUESTDB_GRAFANA_PASSWORD:?Set QUESTDB_GRAFANA_PASSWORD}
+      # Where Grafana reaches the controller to hand an email back for delivery
+      # (D-023). Inside the network that is the service name, not the public URL.
+      PRICKLESCOPE_NOTIFY_BASE_URL: http://api:3001
+      PRICKLESCOPE_TELEGRAF_HOST: telegraf
+      PRICKLESCOPE_TELEGRAF_PORT: '1234'
+    volumes:
+      # A read-only bind mount rather than a Compose `secret`. Compose accepts
+      # uid/gid/mode on a file secret but applies them only under Swarm, so
+      # outside it the file arrives owned by root and this container — which does
+      # not run as root — cannot read it. A bind mount keeps the host's own
+      # ownership, which is the thing that has to be right anyway.
+      - ${PRICKLESCOPE_SECRETS_DIR:-./secrets}:/run/secrets:ro
+      # The API writes the rendered configuration; Telegraf mounts the same
+      # directory read-only and watches it.
+      - ${PRICKLESCOPE_TELEGRAF_RUNTIME_DIR:-./runtime/telegraf}:/etc/telegraf/runtime
+    networks:
+      - monitoring
+
+  # Nothing below is published. The gateway is the only way in.
+  postgres:
+    ports: !reset []
+
+  questdb:
+    ports: !reset []
+
+  telegraf:
+    ports: !reset []
+
+  grafana:
+    ports: !reset []
+    environment:
+      GF_SERVER_ROOT_URL: ${PRICKLESCOPE_APP_ORIGIN:?Set the public HTTPS origin}/grafana/
+      # Only the API reaches Grafana, and it does so from the Compose network.
+      GF_AUTH_PROXY_WHITELIST: ${GRAFANA_AUTH_PROXY_WHITELIST:-172.16.0.0/12}
+    # The controller delivers email itself in production, so Grafana has no
+    # reason to resolve the host it runs on.
+    extra_hosts: !reset []
+
+volumes:
+  caddy-data:
+  caddy-config:

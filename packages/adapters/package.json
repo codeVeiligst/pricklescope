@@ -1,0 +1,28 @@
+{
+  "name": "@pricklescope/adapters",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@pricklescope/contracts": "workspace:*",
+    "net-snmp": "3.26.3"
+  },
+  "devDependencies": {
+    "@types/node": "24.13.3",
+    "@types/net-snmp": "3.23.0",
+    "vitest": "4.1.10"
+  }
+}

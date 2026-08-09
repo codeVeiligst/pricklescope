@@ -1,0 +1,33 @@
+{
+  "name": "@pricklescope/ui",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run --passWithNoTests",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@pricklescope/contracts": "workspace:*",
+    "clsx": "2.1.1",
+    "tailwind-merge": "3.6.0",
+    "uplot": "1.6.32"
+  },
+  "devDependencies": {
+    "@types/react": "19.2.18",
+    "react": "19.2.8",
+    "vitest": "4.1.10"
+  },
+  "peerDependencies": {
+    "react": ">=19"
+  }
+}

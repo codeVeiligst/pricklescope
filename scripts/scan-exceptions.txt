@@ -1,0 +1,24 @@
+# Advisories that ./scripts/scan.sh reports but does not fail on.
+#
+# One identifier per line, each with the reason it is not acted on and what would
+# change that. An entry without a stated reason is a bug in this file. Review the
+# list whenever the scan runs in anger — an exception that has quietly become
+# applicable is worse than no scanning at all.
+
+# React Router 7.18.2, patched only in 8.3.0.
+#
+# The advisory is a CSRF bypass in RSC mode: a server action can execute before
+# the framework returns 400. PrickleScope uses React Router declaratively in a
+# Vite SPA — BrowserRouter, Routes, Link, useNavigate — with no data router, no
+# server actions, and no RSC packages installed, so there is no code path that
+# executes an action at all. CSRF on the real mutation surface is enforced by the
+# API: a session-bound token compared with timingSafeEqual, plus an Origin match,
+# neither of which involves the router.
+#
+# Not fixed because the fix is a major upgrade: react-router-dom is not published
+# for v8, so it means migrating every import to react-router and taking v8's other
+# breaking changes during a hardening milestone.
+#
+# Revisit when: the application adopts a data router, framework mode, or RSC — or
+# at the next planned dependency upgrade, whichever comes first.
+GHSA-qwww-vcr4-c8h2
