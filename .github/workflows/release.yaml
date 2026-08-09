@@ -1,0 +1,176 @@
+# Builds and publishes the release images for a version tag.
+#
+# Only a `v*` tag starts this, and tag creation is the approval step — which is
+# why the tag pattern should be protected in repository settings. A pull request
+# cannot reach this workflow, so a fork cannot reach the registry credential.
+#
+# `id-token: write` is for keyless signing: cosign gets a short-lived certificate
+# from the workflow's OIDC identity, so there is no signing key to store or leak.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+  PNPM_CONFIG_MINIMUM_RELEASE_AGE: '0'
+
+jobs:
+  gate:
+    name: Release gate
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:17.10-alpine@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193
+        env:
+          POSTGRES_USER: pricklescope
+          POSTGRES_PASSWORD: ci-only-not-a-secret
+          POSTGRES_DB: pricklescope_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U pricklescope -d pricklescope_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgresql://pricklescope:ci-only-not-a-secret@localhost:5432/pricklescope_test
+      PRICKLESCOPE_DATABASE_URL: postgresql://pricklescope:ci-only-not-a-secret@localhost:5432/pricklescope_test
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version-file: .nvmrc
+      - run: corepack enable
+      - run: corepack pnpm install --frozen-lockfile
+
+      # Nothing is published until every check a pull request faces has passed
+      # against the tagged commit itself.
+      - run: corepack pnpm lint
+      - run: corepack pnpm typecheck
+      - run: corepack pnpm test
+      - run: corepack pnpm test:integration
+      - run: corepack pnpm test:security
+      - run: ./scripts/security-scan.sh
+      - run: ./scripts/scan.sh
+
+      - name: The tag must match the declared version
+        run: |
+          declared=$(node -p "require('./package.json').version")
+          tagged="${GITHUB_REF_NAME#v}"
+          if [ "$declared" != "$tagged" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match package.json version $declared"
+            exit 1
+          fi
+          echo "version $declared"
+
+  publish:
+    name: Build, sign, and publish
+    needs: gate
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write # the release and its notes
+      packages: write # ghcr
+      id-token: write # keyless signing, no stored key
+      attestations: write # build provenance
+    outputs:
+      api-digest: ${{ steps.api.outputs.digest }}
+      web-digest: ${{ steps.web.outputs.digest }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Two images, because the documented architecture has two: the gateway
+      # serves the built SPA, so the frontend is not a separate runtime image.
+      - name: API tags
+        id: api-meta
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository }}/api
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,format=long
+      - name: Build and push the API image
+        id: api
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          file: infra/Dockerfile.api
+          push: true
+          tags: ${{ steps.api-meta.outputs.tags }}
+          labels: ${{ steps.api-meta.outputs.labels }}
+          provenance: mode=max
+          sbom: true
+
+      - name: Gateway tags
+        id: web-meta
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository }}/web
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,format=long
+      - name: Build and push the gateway image
+        id: web
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          file: infra/Dockerfile.web
+          push: true
+          tags: ${{ steps.web-meta.outputs.tags }}
+          labels: ${{ steps.web-meta.outputs.labels }}
+          provenance: mode=max
+          sbom: true
+
+      - name: Sign the images
+        uses: sigstore/cosign-installer@f713795cb21599bc4e5c4b58cbad1da852d7eeb9 # v3
+      - run: |
+          cosign sign --yes "${REGISTRY}/${GITHUB_REPOSITORY}/api@${{ steps.api.outputs.digest }}"
+          cosign sign --yes "${REGISTRY}/${GITHUB_REPOSITORY}/web@${{ steps.web.outputs.digest }}"
+
+      - name: Software bill of materials
+        run: ./scripts/sbom.sh "${GITHUB_WORKSPACE}/sbom"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: sbom
+          path: sbom/
+          retention-days: 90
+
+      - name: Record what was published
+        run: |
+          {
+            echo "## Published images"
+            echo
+            echo '```'
+            echo "${REGISTRY}/${GITHUB_REPOSITORY}/api@${{ steps.api.outputs.digest }}"
+            echo "${REGISTRY}/${GITHUB_REPOSITORY}/web@${{ steps.web.outputs.digest }}"
+            echo '```'
+            echo
+            echo "Built from \`${GITHUB_SHA}\`. Signed with cosign; verify with:"
+            echo
+            echo '```bash'
+            echo "cosign verify ${REGISTRY}/${GITHUB_REPOSITORY}/api@${{ steps.api.outputs.digest }} \\"
+            echo "  --certificate-identity-regexp 'https://github.com/${GITHUB_REPOSITORY}/.*' \\"
+            echo "  --certificate-oidc-issuer https://token.actions.githubusercontent.com"
+            echo '```'
+          } > release-body.md
+          cat release-body.md >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
+        with:
+          body_path: release-body.md
+          files: sbom/*.cdx.json
+          draft: true
+          generate_release_notes: true

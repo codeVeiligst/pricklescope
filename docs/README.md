@@ -14,12 +14,12 @@ This index is for once you have decided to use it, run it, or work on it.
 
 ## Working on it
 
-| Document                                 | What it answers                                                            |
-| ---------------------------------------- | -------------------------------------------------------------------------- |
-| [development.md](development.md)         | How do I start it locally, run the tests, and reset when it breaks?        |
-| [architecture.md](architecture.md)       | How is it put together, and what is each part responsible for?             |
-| [implementation.md](implementation.md)   | What was decided, why, and what did it cost? Milestones and progress.      |
-| [../CONTRIBUTING.md](../CONTRIBUTING.md) | What does a useful change look like here?                                  |
+| Document                                 | What it answers                                                       |
+| ---------------------------------------- | --------------------------------------------------------------------- |
+| [development.md](development.md)         | How do I start it locally, run the tests, and reset when it breaks?   |
+| [architecture.md](architecture.md)       | How is it put together, and what is each part responsible for?        |
+| [implementation.md](implementation.md)   | What was decided, why, and what did it cost? Milestones and progress. |
+| [../CONTRIBUTING.md](../CONTRIBUTING.md) | What does a useful change look like here?                             |
 
 ## Security
 

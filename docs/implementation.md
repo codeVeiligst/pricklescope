@@ -135,22 +135,23 @@ production same-origin gateway remains a later implementation selection.
 
 ## Milestone overview
 
-| Milestone                           | Outcome                                                             | Status      |
-| ----------------------------------- | ------------------------------------------------------------------- | ----------- |
-| 0. Development infrastructure       | Reproducible local standard services                                | Complete    |
-| 1. Controller foundation            | UI/API skeleton, authentication, metadata migrations, and health    | Complete    |
-| 2. Source and credential management | GUI-managed devices, credentials, profiles, and tests               | Complete    |
-| 2.1 User and identity management    | GUI-managed users, roles, passwords, access, and sessions           | Complete    |
-| 2.2 OIDC provider management        | GUI-managed discovery, secrets, mappings, and activation            | Complete    |
-| 3. Telegraf reconciliation          | Generated configuration with safe apply and rollback                | Complete    |
-| 4. QuestDB storage spike            | Schema, counters, TTL, rollups, and recovery proven                 | Complete    |
-| 4.1 Site hierarchy                  | Cycle-safe nested sites and subtree graph scope                     | Complete    |
-| 5. Grafana integration              | Native graphs plus matching provisioned Grafana dashboards          | Complete    |
-| 6. Threshold alerting               | GUI rules reconciled into Grafana and notifications proven          | In progress |
-| 7. Alloy adapter                    | Dropped (D-024); Telegraf covers the supported inputs               | Dropped     |
-| 8. Hardening                        | Security, backups, observability, and release workflow              | In progress |
-| 9. Security verification            | Executable security tests, OWASP coverage, and a signed-off report  | Complete    |
-| 10. Documentation and deployment    | A docs tree, a product README, and startup workflows for both modes | Complete    |
+| Milestone                           | Outcome                                                                 | Status      |
+| ----------------------------------- | ----------------------------------------------------------------------- | ----------- |
+| 0. Development infrastructure       | Reproducible local standard services                                    | Complete    |
+| 1. Controller foundation            | UI/API skeleton, authentication, metadata migrations, and health        | Complete    |
+| 2. Source and credential management | GUI-managed devices, credentials, profiles, and tests                   | Complete    |
+| 2.1 User and identity management    | GUI-managed users, roles, passwords, access, and sessions               | Complete    |
+| 2.2 OIDC provider management        | GUI-managed discovery, secrets, mappings, and activation                | Complete    |
+| 3. Telegraf reconciliation          | Generated configuration with safe apply and rollback                    | Complete    |
+| 4. QuestDB storage spike            | Schema, counters, TTL, rollups, and recovery proven                     | Complete    |
+| 4.1 Site hierarchy                  | Cycle-safe nested sites and subtree graph scope                         | Complete    |
+| 5. Grafana integration              | Native graphs plus matching provisioned Grafana dashboards              | Complete    |
+| 6. Threshold alerting               | GUI rules reconciled into Grafana and notifications proven              | In progress |
+| 7. Alloy adapter                    | Dropped (D-024); Telegraf covers the supported inputs                   | Dropped     |
+| 8. Hardening                        | Security, backups, observability, and release workflow                  | In progress |
+| 9. Security verification            | Executable security tests, OWASP coverage, and a signed-off report      | Complete    |
+| 10. Documentation and deployment    | A docs tree, a product README, and startup workflows for both modes     | Complete    |
+| 11. Publication and first release   | Repository, CI, release workflow, versioning; publishing is the owner's | In progress |
 
 ## Milestone 0: development infrastructure
 
@@ -1018,35 +1019,88 @@ Partial:
 
 ## Milestone 11: repository publication and first release
 
-- [ ] Verify the local Git configuration, including author identity, default branch, line-ending behavior, and optional commit or tag signing.
-- [ ] Confirm that a new repository can be initialized and populated without modifying or depending on files outside the project directory.
-- [ ] Audit `.gitignore` before staging files.
-- [ ] Exclude secrets, `.env` files, credentials, private keys, TLS certificates, tokens, database contents, persistent volumes, logs, backups, editor metadata, test output, caches, and local development state.
-- [ ] Review generated files, build artifacts, screenshots, fixtures, sample data, and large binaries to determine whether they belong in version control.
-- [ ] Scan the complete staged repository for secrets and sensitive information before creating the first commit.
-- [ ] Inspect the staged file list and repository size to ensure that only intentional project files are included.
-- [ ] Verify that example configuration contains safe placeholders and cannot be mistaken for production credentials.
-- [ ] Confirm that source files, bundled assets, dependencies, fonts, icons, and screenshots can legally be published under the selected project license.
-- [ ] Add appropriate root-level repository files, including `README.md`, `LICENSE`, `SECURITY.md`, `.gitignore`, and contribution guidance where applicable.
-- [ ] Create the initial commit only after the repository-publication audit passes.
-- [ ] Verify that the project can be cloned, built, tested, and started from a clean checkout.
-- [ ] Add GitHub Actions checks for tests, linting, security scanning, and container builds on pull requests.
-- [ ] Add a GitHub Actions release workflow that builds the frontend and API container images from the tagged commit.
-- [ ] Confirm whether the frontend is an independent runtime image or a build artifact included in another image, and publish only the containers required by the documented architecture.
-- [ ] Pin third-party GitHub Actions to trusted commit SHAs and configure minimal workflow permissions.
-- [ ] Prevent pull-request workflows from receiving release credentials or publishing container images.
-- [ ] Publish release images only from protected version tags or an explicitly approved release workflow.
-- [ ] Tag container images with the release version and immutable source revision; do not rely exclusively on `latest`.
-- [ ] Run the dependency and container security checks established in Milestone 8 before publishing release images.
-- [ ] Generate a software bill of materials for each released container image.
-- [ ] Record build provenance and image digests in the release notes.
-- [ ] Sign release tags and container images where practical.
-- [ ] Define the versioning scheme and document the release procedure.
+- [x] Verify the local Git configuration, including author identity, default branch, line-ending behavior, and optional commit or tag signing.
+- [x] Confirm that a new repository can be initialized and populated without modifying or depending on files outside the project directory.
+- [x] Audit `.gitignore` before staging files.
+- [x] Exclude secrets, `.env` files, credentials, private keys, TLS certificates, tokens, database contents, persistent volumes, logs, backups, editor metadata, test output, caches, and local development state.
+- [x] Review generated files, build artifacts, screenshots, fixtures, sample data, and large binaries to determine whether they belong in version control.
+- [x] Scan the complete staged repository for secrets and sensitive information before creating the first commit.
+- [x] Inspect the staged file list and repository size to ensure that only intentional project files are included.
+- [x] Verify that example configuration contains safe placeholders and cannot be mistaken for production credentials.
+- [x] Confirm that source files, bundled assets, dependencies, fonts, icons, and screenshots can legally be published under the selected project license.
+- [x] Add appropriate root-level repository files, including `README.md`, `LICENSE`, `SECURITY.md`, `.gitignore`, and contribution guidance where applicable.
+- [x] Create the initial commit only after the repository-publication audit passes.
+- [~] Verify that the project can be cloned, built, tested, and started from a clean checkout.
+- [~] Add GitHub Actions checks for tests, linting, security scanning, and container builds on pull requests.
+- [~] Add a GitHub Actions release workflow that builds the frontend and API container images from the tagged commit.
+- [x] Confirm whether the frontend is an independent runtime image or a build artifact included in another image, and publish only the containers required by the documented architecture.
+- [x] Pin third-party GitHub Actions to trusted commit SHAs and configure minimal workflow permissions.
+- [x] Prevent pull-request workflows from receiving release credentials or publishing container images.
+- [~] Publish release images only from protected version tags or an explicitly approved release workflow.
+- [x] Tag container images with the release version and immutable source revision; do not rely exclusively on `latest`.
+- [x] Run the dependency and container security checks established in Milestone 8 before publishing release images.
+- [x] Generate a software bill of materials for each released container image.
+- [x] Record build provenance and image digests in the release notes.
+- [~] Sign release tags and container images where practical.
+- [x] Define the versioning scheme and document the release procedure.
 - [ ] Create the first version tag and publish the corresponding container images.
-- [ ] Produce the first release notes, including installation instructions, supported configurations, known limitations, security considerations, image digests, and upgrade or migration guidance.
+- [~] Produce the first release notes, including installation instructions, supported configurations, known limitations, security considerations, image digests, and upgrade or migration guidance.
 - [ ] Perform a clean installation using only the published documentation and release artifacts.
-- [ ] Verify the production deployment, HTTPS, secure cookies, Grafana gateway, persistence, backup, restore, and rollback using the release candidate.
+- [~] Verify the production deployment, HTTPS, secure cookies, Grafana gateway, persistence, backup, restore, and rollback using the release candidate.
 - [ ] Publish the first versioned release only after all release gates have passed.
+
+Acceptance verification, 2026-08-09:
+
+- **The repository exists.** `git init` on `main`, author identity and
+  `core.autocrlf=input` set **repository-locally** so nothing outside the project
+  directory was touched. 238 files, 2.3 MB of content, 3.0 MB of history.
+- **The publication audit passed before the commit, not after.** The staged diff
+  was scanned with gitleaks — 1.53 MB, no leaks — and inspected by hand. Not
+  staged: `.env`, `infra/.env`, `infra/.env.verification`, the credential key and
+  bootstrap password under `infra/secrets/`, the rendered collector configuration
+  with its injected SNMP secrets, `node_modules`, `sbom/`, and test output.
+- **`.gitignore` was rewritten rather than trusted.** It now covers private keys
+  and certificates by extension, backups and dumps, logs, and both runtime
+  directories — while keeping the two `.gitkeep` files under
+  `infra/runtime/telegraf/`, because Compose bind-mounts that path and Docker
+  would otherwise create it owned by root and break the shared uid.
+- **Every production dependency is permissive**: 93 MIT, 8 ISC, 3 BSD-3-Clause,
+  1 BSD-2-Clause. No copyleft, nothing proprietary, nothing unlicensed. Icons are
+  ISC (lucide-react), the chart engine MIT (uPlot), and no font files are bundled
+  — the stylesheet names Inter and falls back to system fonts.
+- **A clean clone works.** Cloned to a fresh directory, `pnpm install
+--frozen-lockfile`, build, lint, typecheck, 83 unit tests, and the documentation
+  checks all pass with nothing from the working copy.
+- **CI and release workflows are written and SHA-pinned.** Every third-party
+  action is pinned to a commit, not a tag; permissions default to `contents:
+read`; CI never receives a registry credential or a signing key, and only a
+  `v*` tag can start the release workflow.
+- **Two images, not three.** The gateway image contains the built SPA, so the
+  frontend is not a separate runtime image and publishing one would publish
+  something nothing runs.
+- **The versioning scheme and release procedure** are in
+  [releasing.md](releasing.md), and [CHANGELOG.md](../CHANGELOG.md) carries the
+  first entry.
+
+Defects the audit found, which is what it is for:
+
+- **`CONTRIBUTING.md` and `docs/README.md` linked to `CLAUDE.md`**, which
+  `.gitignore` excludes. Both links resolved locally and would have 404'd for
+  anyone who cloned. `./scripts/check-docs.sh` now asks `git check-ignore` as well
+  as the filesystem, so the class of problem cannot recur.
+
+Three items are deliberately left open, and one is a judgement worth recording:
+
+- **The first version is 0.1.0, not 1.0.0.** Four Milestone 8 items are open —
+  the controller's own health dashboards, end-to-end coverage of the primary
+  journeys, the accessibility audit, and usability testing. A `1.0.0` would claim
+  those were done.
+- **Create the first version tag**, **perform a clean installation from published
+  artifacts**, and **publish the release** all require a remote repository and a
+  registry, which is the owner's to create. The workflows are ready for it.
+- Signing, image publication from protected tags, and the release notes are
+  marked partial for the same reason: written and configured, unexercised until
+  there is somewhere to publish to.
 
 ## Feature overview
 
@@ -1222,6 +1276,21 @@ implementation:
   the product does not currently have.
 
 ## Completed log
+
+### 2026-08-09 (later)
+
+- Milestone 11 to the edge of publishing. Repository initialised on `main` after
+  a publication audit that scanned the staged diff rather than the working tree,
+  `.gitignore` rewritten, licences confirmed permissive, a clean clone verified to
+  build and test, CI and release workflows written with every action pinned to a
+  commit SHA, and the versioning scheme and changelog written.
+- Caught two documentation links to `CLAUDE.md`, which is git-ignored: they
+  resolved locally and would have broken for anyone cloning. The documentation
+  check now consults `git check-ignore` too.
+- Recommended 0.1.0 rather than 1.0.0 for the first release, because four
+  Milestone 8 items are open.
+- Left tagging, publishing, and the clean install from published artifacts to the
+  owner: they need a remote and a registry.
 
 ### 2026-08-09
 

@@ -1,0 +1,168 @@
+# Everything a pull request has to pass.
+#
+# Third-party actions are pinned to commit SHAs, not tags: a tag is mutable and
+# whoever owns it can change what runs here. Permissions default to read and are
+# widened per job only where a job needs it — which none of these do.
+#
+# This workflow never receives a registry credential or a signing key. Publishing
+# lives in release.yaml, which only a version tag can start, so a pull request
+# from a fork cannot reach anything that publishes.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Registry publish dates are not needed for a frozen-lockfile install, and the
+  # workspace's 24-hour hold would otherwise make CI depend on npm being up.
+  PNPM_CONFIG_MINIMUM_RELEASE_AGE: '0'
+
+jobs:
+  verify:
+    name: Lint, typecheck, and test
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:17.10-alpine@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193
+        env:
+          POSTGRES_USER: pricklescope
+          POSTGRES_PASSWORD: ci-only-not-a-secret
+          POSTGRES_DB: pricklescope_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U pricklescope -d pricklescope_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      # Integration and security suites skip silently without this, so it is set
+      # here and asserted below rather than assumed.
+      TEST_DATABASE_URL: postgresql://pricklescope:ci-only-not-a-secret@localhost:5432/pricklescope_test
+      PRICKLESCOPE_DATABASE_URL: postgresql://pricklescope:ci-only-not-a-secret@localhost:5432/pricklescope_test
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version-file: .nvmrc
+      - run: corepack enable
+      - run: corepack pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: corepack pnpm lint
+      - name: Format
+        run: corepack pnpm format:check
+      - name: Typecheck
+        run: corepack pnpm typecheck
+      - name: Unit tests
+        run: corepack pnpm test
+
+      - name: Integration tests
+        run: |
+          output=$(corepack pnpm test:integration 2>&1); status=$?
+          echo "$output"
+          # A skipped suite is green and proves nothing. Fail if it did not run.
+          echo "$output" | grep -qE 'Tests +[1-9][0-9]* passed' || {
+            echo "::error::The integration suite did not execute — TEST_DATABASE_URL is probably unset."
+            exit 1
+          }
+          exit $status
+
+      - name: Security tests
+        run: |
+          output=$(corepack pnpm test:security 2>&1); status=$?
+          echo "$output"
+          echo "$output" | grep -qE 'Tests +[1-9][0-9]* passed' || {
+            echo "::error::The security suite did not execute — TEST_DATABASE_URL is probably unset."
+            exit 1
+          }
+          exit $status
+
+      - name: Documentation
+        run: corepack pnpm docs:check
+
+  browser:
+    name: End-to-end
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version-file: .nvmrc
+      - run: corepack enable
+      - run: corepack pnpm install --frozen-lockfile
+      - name: Start the stack
+        run: ./scripts/dev-up.sh --no-serve
+      - name: Install the pinned browser
+        run: corepack pnpm --filter @pricklescope/web exec playwright install --with-deps chromium
+      - name: End-to-end tests
+        run: corepack pnpm test:e2e
+      - if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: playwright-report
+          path: apps/web/playwright-report/
+          retention-days: 7
+
+  security-scan:
+    name: Static analysis and secrets
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          # gitleaks scans history on a push to main; a shallow clone would hide it.
+          fetch-depth: 0
+      - name: Static analysis and secret scanning
+        run: ./scripts/security-scan.sh
+
+  dependencies:
+    name: Dependency and image advisories
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version-file: .nvmrc
+      - run: corepack enable
+      - run: corepack pnpm install --frozen-lockfile
+      - name: Advisories
+        run: ./scripts/scan.sh
+
+  images:
+    name: Container images build
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - name: Build the API image
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          file: infra/Dockerfile.api
+          push: false
+          load: true
+          tags: pricklescope/api:ci
+      - name: Build the gateway image
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          file: infra/Dockerfile.web
+          push: false
+          load: true
+          tags: pricklescope/web:ci
+      - name: The images must actually run
+        # Two arrangements have built cleanly, scanned cleanly, and failed the
+        # moment a container started: a deploy tree whose workspace links pointed
+        # outside the image, and a flattened copy that lost the transitive graph.
+        # Building is not evidence.
+        run: |
+          docker run --rm --entrypoint node pricklescope/api:ci \
+            -e "import('/app/dist/app.js').then(() => console.log('api module graph loads')).catch(e => { console.error(e); process.exit(1) })"
+          docker run --rm --entrypoint sh pricklescope/web:ci \
+            -c 'test -f /srv/index.html && caddy validate --config /etc/caddy/Caddyfile'

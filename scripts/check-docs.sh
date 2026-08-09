@@ -119,7 +119,7 @@ for path in list(Path('.').rglob('*.md')):
     for match in re.finditer(r'corepack pnpm (?:--filter \S+ )?(?:run )?([a-z][a-z0-9:-]*)', path.read_text()):
         name = match.group(1)
         # pnpm's own subcommands, not workspace scripts.
-        if name in {'install', 'exec', 'audit', 'why', 'view', 'add', 'remove', 'config', 'deploy', 'clean'}:
+        if name in {'install', 'exec', 'audit', 'why', 'view', 'add', 'remove', 'config', 'deploy', 'clean', 'version', 'licenses', 'update', 'outdated'}:
             continue
         checked += 1
         if name not in known:
