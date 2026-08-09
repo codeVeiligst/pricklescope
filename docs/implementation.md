@@ -730,14 +730,13 @@ Defects found during verification:
 - [ ] Add controller and pipeline health dashboards and alerts.
 - [x] Add upgrade and rollback documentation for every pinned component.
       [upgrades.md](upgrades.md), written in Milestone 10.
-- [ ] Add end-to-end tests for the primary user journeys. **The existing suite is
-      not hermetic**, which CI exposed on its first run: 49 of 54 pass on a clean
-      environment and 5 fail because they need ambient data — a site tree, a
-      device, QuestDB metrics, and a configured Grafana. Those five have only
-      ever passed against a developer's own populated instance, so they were
-      proving less than they appeared to. This item now includes a fixture the
-      suite creates for itself; `docs/development.md` notes there is no loader
-      today.
+- [x] Add end-to-end tests for the primary user journeys. 54 tests across the
+      sign-in, inventory, site hierarchy, graphs, alerting, Grafana gateway, and
+      phone-viewport journeys, passing on an environment seeded from nothing.
+      `apps/web/tests/e2e/global-setup.ts` applies retention so the QuestDB
+      tables exist, reconciles Grafana so the deep links resolve, creates a
+      credential, site, and source under its own names, and writes synthetic
+      samples — idempotently, so a populated instance is left alone.
 - [ ] Audit keyboard navigation, focus, contrast, reduced motion, responsive
       behavior, and WCAG 2.2 AA conformance.
 - [ ] Run task-based usability tests for adding a device, inventory, graphs,
@@ -1104,12 +1103,20 @@ CI found two real defects on its first runs, which is the argument for having it
   could not resolve `@pricklescope/db`. The clean-checkout verification missed it
   because it ran `pnpm build` by hand before the other commands, which is not what
   the documentation tells anyone to do — it tested a path no reader would take.
-- **The end-to-end suite is not hermetic.** 49 of 54 pass on a clean environment;
-  5 need a site tree, a device, QuestDB metrics, and a configured Grafana. They
-  have only ever run against a developer's populated instance. Recorded against
-  the Milestone 8 item rather than patched here, because making them
-  self-sufficient is that item's work, not a CI fix — and narrowing CI to make it
-  green would be the wrong instinct entirely.
+- **The end-to-end suite was not hermetic.** 49 of 54 passed on a clean
+  environment; 5 needed a site tree, a device, QuestDB metrics, and a configured
+  Grafana, and had only ever run against a developer's populated instance. Fixed
+  with a Playwright `globalSetup` rather than by narrowing CI until it went
+  green. Three attempts, each a lesson worth keeping: an `INSERT` without a
+  column list must match every column, and QuestDB adds columns of its own when
+  Telegraf sends an undeclared field — so the statement worked on a fresh table
+  and failed on a used one, reproducing inside the fixture the very
+  environment-dependence it existed to remove. `latestSources` reads
+  `network_system`, so a device with availability samples and no system row is
+  invisible to the fleet graph. And the wait loop logged "metrics written"
+  whether or not the data appeared, leaving a test to fail later with a message
+  about the application instead of about the fixture; it now throws and says
+  where to look.
 
 Three items are deliberately left open, and one is a judgement worth recording:
 
