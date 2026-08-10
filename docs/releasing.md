@@ -49,8 +49,15 @@ And the two that need a live stack, which CI cannot do for you:
 ## Cutting a release
 
 ```bash
-# 1. Set the version everywhere it is declared
-corepack pnpm version 1.1.0 --no-git-tag-version
+# 1. Set the version everywhere it is declared. `pnpm version` moves the root
+#    only and refuses on an unclean tree, so the seven package.json files are
+#    set together — the release gate checks that they agree.
+node -e "for (const f of ['package.json','packages/adapters/package.json',
+  'packages/contracts/package.json','packages/db/package.json','packages/ui/package.json',
+  'apps/api/package.json','apps/web/package.json']) {
+    const p = require('node:fs'); const j = JSON.parse(p.readFileSync(f,'utf8'));
+    j.version = '1.1.0'; p.writeFileSync(f, JSON.stringify(j, null, 2) + '\n');
+  }"
 
 # 2. Write the entry in CHANGELOG.md — what an operator has to know, not a
 #    commit list. The release workflow generates the commit list itself.

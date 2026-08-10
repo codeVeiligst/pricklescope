@@ -74,6 +74,19 @@ jobs:
           fi
           echo "version $declared"
 
+          # The apps and packages are private and never published, so nothing
+          # else would notice them drifting away from the root — and a package
+          # claiming a version that was never released is a lie in an artifact
+          # someone may read.
+          for f in packages/*/package.json apps/*/package.json; do
+            v=$(node -p "require('./$f').version")
+            if [ "$v" != "$declared" ]; then
+              echo "::error::$f is $v, not $declared"
+              exit 1
+            fi
+          done
+          echo "all workspace packages agree"
+
       # Here rather than where the notes are written, which is after the images
       # have been pushed. A gate that fires after publishing is not a gate.
       - name: The changelog must describe this version
