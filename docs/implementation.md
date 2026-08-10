@@ -1298,6 +1298,26 @@ Two things remain partial, and one is a judgement worth recording:
   `pull_request` and branch protection requires its four checks; that stays
   partial until a pull request actually runs them.
 
+## Deferred to 0.1.2
+
+Small things decided but deliberately not done yet, so that a released version
+is not disturbed for them. Each says what to do, not merely that something is
+wrong.
+
+- **Remove `infra/questdb-backup.sh` and `infra/questdb-restore-test.sh`.** They
+  prototyped the checkpoint-and-copy technique during the storage spike and are
+  superseded by `infra/backup.sh` and `infra/restore-test.sh`, which do the same
+  thing for all three stores and are verified against a production deployment.
+  The prototypes read `infra/.env` and reach QuestDB on a host port, so they
+  cannot back up a deployment at all — two ways to back up one store, one of
+  which silently does nothing where it matters. They are labelled development-only
+  in [infrastructure.md](infrastructure.md) for now; 0.1.1 shipped them, so the
+  removal waits for the next version rather than changing a release after the
+  fact. When it happens, update the references in
+  [infrastructure.md](infrastructure.md) and
+  [storage-spike.md](storage-spike.md) — `check-docs.sh` fails on a documented
+  script path that no longer exists, which is the reminder.
+
 ## Feature overview
 
 Features are numbered separately from milestones. Milestones 0 through 11 carry

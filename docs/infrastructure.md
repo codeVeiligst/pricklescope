@@ -105,7 +105,12 @@ contains.
 technique during the storage spike and are **development-only**: they read
 `infra/.env`, which a production host does not have, and reach QuestDB on a host
 port that production deliberately does not publish. They cannot back up a
-deployment, and are kept only for working against the development stack.
+deployment.
+
+> **Deprecated — scheduled for removal in 0.1.2.** Use `infra/backup.sh` and
+> `infra/restore-test.sh` instead; they cover QuestDB and the other two stores in
+> one consistent pass. Nothing depends on the prototypes, and they are kept only
+> so that 0.1.1 is not changed after release.
 
 The restore test creates a uniquely named temporary volume and container, adds
 QuestDB's `_restore` marker, boots the exact pinned image with telemetry disabled
