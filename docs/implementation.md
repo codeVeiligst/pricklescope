@@ -711,11 +711,11 @@ Defects found during verification:
 Written on 2026-08-10, after all three were done, because their lists overlapped
 enough to be confusing while they were in progress. The boundary is:
 
-| Milestone         | Question it answers                                             |
-| ----------------- | --------------------------------------------------------------- |
-| **8** hardening   | Is it safe and operable to run at all?                          |
-| **9** verification | Does that survive somebody attacking it on purpose?             |
-| **10** docs & workflows | Can a stranger deploy, operate, and upgrade it unaided?    |
+| Milestone               | Question it answers                                     |
+| ----------------------- | ------------------------------------------------------- |
+| **8** hardening         | Is it safe and operable to run at all?                  |
+| **9** verification      | Does that survive somebody attacking it on purpose?     |
+| **10** docs & workflows | Can a stranger deploy, operate, and upgrade it unaided? |
 
 Where they genuinely touched the same ground, and who owns it:
 
@@ -748,14 +748,14 @@ Where they genuinely touched the same ground, and who owns it:
 Milestone 10 is complete. Six items remain, in one list so nobody has to
 reconcile three:
 
-| Item                                                       | Milestone | Why it is not done                                                                                                   |
-| ---------------------------------------------------------- | --------- | -------------------------------------------------------------------------------------------------------------------- |
-| Alerts on the controller's own health                      | 8         | Dashboards exist; nothing watches them. A collector that stops writing is visible only to someone looking.           |
-| Accessibility and WCAG 2.2 AA audit                        | 8         | Not started. Responsive behaviour is measured at 320/360/390px; keyboard, focus, contrast, and reduced motion are not. |
-| Task-based usability tests                                 | 8         | Not started. Needs people, not code.                                                                                 |
-| Fuzzing SNMP response parsing                              | 9         | Needs a hostile-agent harness rather than a generator — larger than the rest of that milestone put together.          |
-| Dynamic testing through the gateway                        | 9         | ZAP cannot complete a TLS handshake with Caddy's local CA. A public certificate would let it take the same path.      |
-| Expiry dates on accepted findings                          | 9         | An owner decision, not work. Each accepted risk has an owner, rationale, and compensating control already.            |
+| Item                                  | Milestone | Why it is not done                                                                                                     |
+| ------------------------------------- | --------- | ---------------------------------------------------------------------------------------------------------------------- |
+| Alerts on the controller's own health | 8         | Dashboards exist; nothing watches them. A collector that stops writing is visible only to someone looking.             |
+| Accessibility and WCAG 2.2 AA audit   | 8         | Not started. Responsive behaviour is measured at 320/360/390px; keyboard, focus, contrast, and reduced motion are not. |
+| Task-based usability tests            | 8         | Not started. Needs people, not code.                                                                                   |
+| Fuzzing SNMP response parsing         | 9         | Needs a hostile-agent harness rather than a generator — larger than the rest of that milestone put together.           |
+| Dynamic testing through the gateway   | 9         | ZAP cannot complete a TLS handshake with Caddy's local CA. A public certificate would let it take the same path.       |
+| Expiry dates on accepted findings     | 9         | An owner decision, not work. Each accepted risk has an owner, rationale, and compensating control already.             |
 
 The first three are what keeps the version at `0.1.x`. A `1.0.0` would claim they
 were done.
