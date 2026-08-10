@@ -52,6 +52,7 @@ PrickleScope ${version}. Built from \`${sha}\`.
 · **Operate:** [docs/operations.md](https://github.com/${repository}/blob/${sha}/docs/operations.md)
 · **Report a vulnerability:** [SECURITY.md](https://github.com/${repository}/blob/${sha}/SECURITY.md)
 ${entry}
+
 ## Images
 
 \`\`\`
