@@ -1249,6 +1249,33 @@ CI found two real defects on its first runs, which is the argument for having it
   class of bug that no amount of reading finds. That is what a clean install is
   for.
 
+- **0.1.1 carries the fixes, and the release process finally ran clean.**
+  `v0.1.1` at `f327c19`: gate and publish both green on the first attempt, which
+  neither previous run managed. It was the first exercise of two things the 0.1.0
+  release had not tested — the notes generator, whose output now carries the
+  changelog entry rather than digests alone, and the gate's check that the
+  workspace `package.json` files agree with the root.
+
+  ```text
+  ghcr.io/codeveiligst/pricklescope/api@sha256:33bb8dd4…
+  ghcr.io/codeveiligst/pricklescope/web@sha256:f8188615…
+  ```
+
+  The verify command was extracted verbatim from the published notes and run:
+  both images pass, the certificate names `refs/tags/v0.1.1` and commit
+  `f327c194`, and the pattern still rejects a `ci.yaml` identity. The drift check
+  was made to fail on purpose against a fixture before being trusted.
+
+  A seventh defect surfaced while cutting it: `pnpm version` moves the root
+  package only and refuses on an unclean tree, so the documented bump did not do
+  what it said. Seven `package.json` files now move together.
+
+  And one in my own verification, worth recording because it is the same shape as
+  everything else this milestone: the script that extracts the verify command
+  from the release notes truncated its output file before the extraction failed,
+  so `bash` ran an empty file, exited 0, and the check reported a pass for having
+  run nothing. Caught by asking whether the file had any bytes in it.
+
 Two items are deliberately left open, and one is a judgement worth recording:
 
 - **The first version is 0.1.0, not 1.0.0.** Four Milestone 8 items are open —
