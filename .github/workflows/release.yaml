@@ -42,6 +42,11 @@ jobs:
       PRICKLESCOPE_DATABASE_URL: postgresql://pricklescope:ci-only-not-a-secret@localhost:5432/pricklescope_test
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          # security-scan.sh scans the commit history for secrets, and the
+          # default shallow clone has none to scan — the check would pass by
+          # having nothing to look at. CI's own scan job already does this.
+          fetch-depth: 0
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version-file: .nvmrc

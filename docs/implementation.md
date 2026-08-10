@@ -706,6 +706,60 @@ Defects found during verification:
   cleared is worse than none, so this was fixed rather than filtered out of the
   probe.
 
+## How Milestones 8, 9, and 10 divide
+
+Written on 2026-08-10, after all three were done, because their lists overlapped
+enough to be confusing while they were in progress. The boundary is:
+
+| Milestone         | Question it answers                                             |
+| ----------------- | --------------------------------------------------------------- |
+| **8** hardening   | Is it safe and operable to run at all?                          |
+| **9** verification | Does that survive somebody attacking it on purpose?             |
+| **10** docs & workflows | Can a stranger deploy, operate, and upgrade it unaided?    |
+
+Where they genuinely touched the same ground, and who owns it:
+
+- **The production origin** — HTTPS, `PRICKLESCOPE_COOKIE_SECURE`, and the
+  `/grafana` gateway — is claimed by items in both 8 and 10. **Milestone 8 built
+  and verified it**, because verifying secure-cookie behaviour requires an origin
+  that serves HTTPS and development serves plain HTTP by design (D-032).
+  Milestone 10 owns explaining it in [deployment.md](deployment.md), not building
+  it. The repeatable check is
+  `./infra/verify-production-origin.sh --env-file infra/.env.production --no-build`,
+  counted once, under Milestone 8.
+- **Scanning** is split by what is scanned, not by who runs it. Milestone 8 owns
+  dependencies and container images (`scripts/scan.sh`); Milestone 9 owns
+  first-party code and secrets (`scripts/security-scan.sh`). Both appear in the
+  release gate.
+- **Dynamic testing** overlaps the origin verification on purpose and unevenly:
+  ZAP could not complete a TLS handshake with Caddy's local certificate
+  authority, so it ran against the API on the container network while the 24
+  origin assertions cover the gateway path. Neither alone covers both; the
+  report says so rather than implying full coverage.
+- **`upgrades.md` and `operations.md`** are Milestone 8 items written during
+  Milestone 10. They are ticked once, under 8, where the requirement lives; the
+  text says where the writing happened. This is sequencing, not double-counting.
+- **Three Milestone 9 items were blocked on Milestone 11**, not on any security
+  work: scanning commit history needs commits, reviewing CI needs a pipeline, and
+  naming a tested commit needs a repository. They were closed on 2026-08-10.
+
+### What is still open across all three
+
+Milestone 10 is complete. Six items remain, in one list so nobody has to
+reconcile three:
+
+| Item                                                       | Milestone | Why it is not done                                                                                                   |
+| ---------------------------------------------------------- | --------- | -------------------------------------------------------------------------------------------------------------------- |
+| Alerts on the controller's own health                      | 8         | Dashboards exist; nothing watches them. A collector that stops writing is visible only to someone looking.           |
+| Accessibility and WCAG 2.2 AA audit                        | 8         | Not started. Responsive behaviour is measured at 320/360/390px; keyboard, focus, contrast, and reduced motion are not. |
+| Task-based usability tests                                 | 8         | Not started. Needs people, not code.                                                                                 |
+| Fuzzing SNMP response parsing                              | 9         | Needs a hostile-agent harness rather than a generator — larger than the rest of that milestone put together.          |
+| Dynamic testing through the gateway                        | 9         | ZAP cannot complete a TLS handshake with Caddy's local CA. A public certificate would let it take the same path.      |
+| Expiry dates on accepted findings                          | 9         | An owner decision, not work. Each accepted risk has an owner, rationale, and compensating control already.            |
+
+The first three are what keeps the version at `0.1.x`. A `1.0.0` would claim they
+were done.
+
 ## Milestone 8: hardening
 
 - [x] Threat-model credentials, collectors, and internal service APIs.
@@ -854,7 +908,7 @@ Notes for later milestones:
 - [x] Assess the application against [OWASP ASVS 5.0](https://owasp.org/www-project-application-security-verification-standard/), using Level 1 as the baseline and relevant Level 2 requirements for authentication, sessions, credentials, collectors, administrative operations, and internal APIs.
 - [x] Review the service APIs against the [OWASP API Security Top 10](https://owasp.org/API-Security/).
 - [x] Add static application security testing (SAST) for all first-party code, covering injection, command execution, filesystem access, deserialization, cryptography, template rendering, and outbound requests.
-- [~] Add secret scanning for source code, configuration, fixtures, container build contexts, CI definitions, and commit history.
+- [x] Add secret scanning for source code, configuration, fixtures, container build contexts, CI definitions, and commit history. Completed 2026-08-10, once Milestone 11 supplied a history to scan.
 - [x] Manually review the security-critical implementations identified by the threat model, particularly credential handling, authorization, collector enrollment, session management, and internal service calls.
 - [x] Add negative authorization tests proving that anonymous, ordinary, and cross-device users cannot access or modify resources outside their permissions.
 - [x] Add adversarial API tests for injection, path traversal, SSRF, mass assignment, malformed input, oversized requests, unexpected HTTP methods, and content-type confusion.
@@ -862,11 +916,11 @@ Notes for later milestones:
 - [~] Fuzz or property-test collector and ingestion parsers with malformed, truncated, duplicated, reordered, oversized, and high-rate input.
 - [x] Verify request-size limits, timeouts, concurrency limits, pagination bounds, rate limiting, and backpressure against resource-exhaustion attacks.
 - [~] Run authenticated dynamic application security testing against an isolated production-like deployment, including the Grafana gateway and every externally reachable route.
-- [~] Review first-party deployment and CI configuration for exposed services, excessive privileges, unsafe defaults, untrusted build inputs, writable container filesystems, and enabled debug functionality.
+- [x] Review first-party deployment and CI configuration for exposed services, excessive privileges, unsafe defaults, untrusted build inputs, writable container filesystems, and enabled debug functionality. Deployment reviewed in Milestone 9; CI reviewed 2026-08-10, once Milestone 11 supplied a pipeline to review.
 - [x] Verify that logs, metrics, traces, API errors, diagnostics, and exports do not disclose credentials, tokens, cookies, or sensitive device metadata.
 - [x] Add a regression test for every confirmed security defect.
 - [~] Record every finding as fixed, accepted, or a false positive. Require an owner, rationale, compensating control, and expiry date for each accepted risk.
-- [~] Produce a security-verification report recording the tested commit and image digests, OWASP coverage, tools and versions, findings, exclusions, and residual risks.
+- [x] Produce a security-verification report recording the tested commit and image digests, OWASP coverage, tools and versions, findings, exclusions, and residual risks. The tested commit was added 2026-08-10; there was no commit to name before Milestone 11.
 - [x] Resolve all critical findings and review all high-severity findings before release.
 
 [security/verification.md](security/verification.md) is the report: tools and
@@ -896,10 +950,13 @@ Acceptance verification, 2026-08-08:
   be read. `./scripts/security-scan.sh selftest` plants a secret and three flaws
   and fails if either tool misses them.
 
-Partial items, and exactly what is missing from each:
+Partial items, and exactly what is missing from each. **Three of the six were
+waiting on Milestone 11 rather than on any security work, and were closed on
+2026-08-10 once it landed** — see the note at the end of this milestone:
 
-- **Secret scanning** covers the working tree, not commit history: there is no
-  history yet. Milestone 11 introduces Git, and the history scan belongs with it.
+- ~~**Secret scanning** covers the working tree, not commit history: there is no
+  history yet. Milestone 11 introduces Git, and the history scan belongs with
+  it.~~ **Closed 2026-08-10.**
 - **Fuzzing** covers the two places caller text becomes machine-readable output —
   the Telegraf renderer and the alert-query builder. SNMP response parsing is not
   fuzzed: it needs a hostile-agent harness rather than a generator, which is a
@@ -909,12 +966,13 @@ Partial items, and exactly what is missing from each:
   certificate authority. The gateway's own behaviour is covered instead by the 24
   assertions in `./infra/verify-production-origin.sh`, which do go through it. A
   public certificate would let ZAP take the same path.
-- **Deployment review** is done; **CI review** cannot be — there is no CI until
-  Milestone 11. The checks a pipeline would run all exist and are runnable now.
+- ~~**Deployment review** is done; **CI review** cannot be — there is no CI until
+  Milestone 11.~~ **Closed 2026-08-10.**
 - **Finding records** have an owner, rationale, and compensating control. They do
   not have expiry dates, which would need the owner to set them.
-- **The report** names tools, versions, and image digests. It cannot name a tested
-  commit, because the working copy is not a repository yet.
+- ~~**The report** names tools, versions, and image digests. It cannot name a
+  tested commit, because the working copy is not a repository yet.~~ **Closed
+  2026-08-10.**
 
 Defects found in the verification itself, which is the part worth not skipping:
 
@@ -952,12 +1010,12 @@ Defects found in the verification itself, which is the part worth not skipping:
 - [x] Create or consolidate a single development startup script with sensible defaults, clear status output, prerequisite checks, and actionable failure messages.
 - [x] Create a development-environment guide covering startup, shutdown, reset, logs, test data, configuration overrides, and common troubleshooting steps.
 - [x] Create a production startup script that validates required configuration, prepares persistent storage, starts the pinned containers, and reports service health.
-- [x] Add production HTTPS support, including certificate configuration or documented integration with a reverse proxy or automated certificate provider.
-- [x] Ensure the production workflow configures secure cookies, including `PRICKLESCOPE_COOKIE_SECURE`, and routes the application and Grafana gateway through the HTTPS origin.
+- [x] Add production HTTPS support, including certificate configuration or documented integration with a reverse proxy or automated certificate provider. Built and verified under Milestone 8 (D-032); documented here.
+- [x] Ensure the production workflow configures secure cookies, including `PRICKLESCOPE_COOKIE_SECURE`, and routes the application and Grafana gateway through the HTTPS origin. Same origin as above — verified once, under Milestone 8.
 - [x] Create a production deployment guide covering prerequisites, DNS, ports, TLS certificates, secrets, persistent volumes, startup, shutdown, upgrades, rollback, backup, restore, and health verification.
 - [x] Ensure neither startup script generates insecure production credentials, commits secrets, or silently falls back to development security settings.
 - [x] Check the development and production instructions
-- [~] Add automated checks that verify documentation links, example configuration, shell-script syntax, and documented commands where practical.
+- [x] Add automated checks that verify documentation links, example configuration, shell-script syntax, and documented commands where practical. Closed 2026-08-10: `shellcheck` was the only gap and it was missing from the development machine, not from the check — CI runs the same script and reports it clean.
 - [x] Create a SBOM document
 
 Acceptance verification, 2026-08-09:

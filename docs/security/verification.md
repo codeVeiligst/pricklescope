@@ -2,6 +2,13 @@
 
 Status: Complete for Milestone 9
 Date: 2026-08-08
+Revised: 2026-08-10 — three of this report's gaps existed only because the project
+was not yet a Git repository and had no CI. Milestone 11 supplied both, so the
+commit-history secret scan, the CI review, and the tested-commit record are now
+filled in rather than deferred. Each is marked **Revised 2026-08-10** below.
+Tested commit: `b87c499`, released as `v0.1.1`
+(`ghcr.io/codeveiligst/pricklescope/api@sha256:33bb8dd4…`,
+`web@sha256:f8188615…`).
 Scope: the PrickleScope controller — its API, its collector pipeline, its browser
 application, and the container stack it ships with.
 Companion to [threat-model.md](threat-model.md), which is the threat model this verifies
@@ -22,7 +29,7 @@ names the check that produced it, and the checks are all runnable.
 | Secret disclosure             | Planted values, checked on every path | `apps/api/tests/security/disclosure.test.ts`           |
 | Config and SQL rendering      | Seeded fuzzing                        | `packages/adapters/src/fuzz.test.ts`                   |
 | First-party code              | Semgrep, project rules + community    | `./scripts/security-scan.sh sast`                      |
-| Secrets in the tree           | gitleaks                              | `./scripts/security-scan.sh secrets`                   |
+| Secrets, tree and history     | gitleaks, two passes                  | `./scripts/security-scan.sh secrets`                   |
 | Dependencies and images       | pnpm audit, Trivy                     | `./scripts/scan.sh`                                    |
 | Running deployment            | ZAP baseline, authenticated           | see "Dynamic testing"                                  |
 | TLS, cookies, gateway         | 24 assertions against a real origin   | `./infra/verify-production-origin.sh`                  |
@@ -256,9 +263,29 @@ which do go through it. A public certificate would let ZAP take the same path.
 - Secrets reach the container as a read-only bind mount, not environment
   variables, so they are not visible in `docker inspect`.
 - The API image carries no npm, no TypeScript sources, and no test files.
-- No CI exists yet — GitHub Actions arrives in Milestone 11. The checks that would
-  run there exist and are runnable today: `lint`, `typecheck`, `test`,
-  `test:integration`, `test:security`, `test:e2e`, `scan`, `security-scan`.
+
+**Revised 2026-08-10 — CI now exists and was reviewed.** Two workflows, both with
+`permissions: contents: read` by default and widened per job only where needed:
+
+- Every third-party action is pinned to a commit SHA, not a tag, because a tag is
+  mutable and whoever owns it can change what runs.
+- Only a `v*` tag starts the release workflow, so a pull request — including one
+  from a fork — never receives the registry credential or reaches the signing
+  identity. Publishing takes a tag; the release itself takes a person.
+- Signing is keyless. The certificate comes from the workflow's OIDC identity, so
+  there is no signing key stored anywhere to leak.
+- The release gate runs every check against the tagged commit before anything is
+  built, and refuses when the tag, `package.json`, the workspace packages, or the
+  changelog disagree.
+- Both workflows check out with `fetch-depth: 0` where they scan for secrets. A
+  shallow clone has no history, and a history scan of nothing passes.
+
+**Revised 2026-08-10 — the commit history is scanned.** This report originally
+covered the working tree only, because there was no history to scan. gitleaks now
+runs twice, and the second pass reads the commit graph: 24 commits, clean. Its
+self-test commits a secret, deletes it, and requires the history pass to find what
+the working-tree pass cannot — otherwise the second pass could be reading nothing
+and reporting clean, which is how the first gitleaks integration failed.
 
 ## Release criteria
 

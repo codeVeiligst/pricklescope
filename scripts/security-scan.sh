@@ -63,7 +63,40 @@ run_secrets() {
   fi
   python3 "${repo_dir}/scripts/security-scan-report.py" gitleaks "${workspace}/gitleaks.json" \
     "${repo_dir}/scripts/security-scan-exceptions.txt" || failures=$((failures + 1))
+
+  # The scan above reads the working tree. A secret that was committed and then
+  # removed is invisible to it and still in the history for anyone who clones —
+  # which is the case worth catching. This pass was impossible while the project
+  # was not a repository; Milestone 11 made it possible, so it runs now.
+  if [[ -d "${target}/.git" ]]; then
+    echo "== gitleaks, commit history"
+    docker run --rm -v "${target}:/repo:ro" -v "${workspace}:/out" "${GITLEAKS_IMAGE}" \
+      detect --source /repo --redact --config /repo/scripts/gitleaks.toml \
+      --report-format json --report-path /out/gitleaks-history.json >/dev/null 2>&1 || true
+
+    if [[ ! -f "${workspace}/gitleaks-history.json" ]]; then
+      echo "  gitleaks produced no history report" >&2
+      failures=$((failures + 1))
+      return
+    fi
+    python3 "${repo_dir}/scripts/security-scan-report.py" gitleaks \
+      "${workspace}/gitleaks-history.json" \
+      "${repo_dir}/scripts/security-scan-exceptions.txt" || failures=$((failures + 1))
+  else
+    echo "  no .git directory; commit history not scanned" >&2
+  fi
   echo
+}
+
+count_findings() {
+  python3 -c "
+import json, sys
+try:
+    data = json.load(open(sys.argv[1]))
+except Exception:
+    data = []
+print(len(data or []))
+" "$1"
 }
 
 run_selftest() {
@@ -111,10 +144,43 @@ except Exception:
 print(len(data))
 ")"
 
+  # A secret committed and then deleted: gone from the working tree, still in the
+  # history of every clone. The working-tree scan cannot see it by construction,
+  # so this is what proves the history pass adds something rather than repeating
+  # the first one.
+  local buried="${workspace}/buried"
+  local history_found=0 worktree_blind=0
+  rm -rf "${buried}" && mkdir -p "${buried}"
+  (
+    cd "${buried}"
+    git init -q .
+    git config user.email selftest@example.invalid
+    git config user.name 'Self test'
+    printf 'export const token = %s%s%s\n' "'" \
+      "ghp_$(head -c 24 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 36)" "'" >buried.ts
+    git add buried.ts && git commit -q -m 'add a secret'
+    git rm -q buried.ts && git commit -q -m 'remove it again'
+  )
+  docker run --rm -v "${buried}:/repo:ro" -v "${workspace}:/out" "${GITLEAKS_IMAGE}" \
+    detect --source /repo --redact \
+    --report-format json --report-path /out/selftest-history.json >/dev/null 2>&1 || true
+  docker run --rm -v "${buried}:/repo:ro" -v "${workspace}:/out" "${GITLEAKS_IMAGE}" \
+    detect --source /repo --no-git --redact \
+    --report-format json --report-path /out/selftest-worktree.json >/dev/null 2>&1 || true
+  history_found="$(count_findings "${workspace}/selftest-history.json")"
+  worktree_blind="$(count_findings "${workspace}/selftest-worktree.json")"
+
   if [[ "${gitleaks_found}" -gt 0 ]]; then
     echo "  PASS  gitleaks found the planted secret"
   else
     echo "  FAIL  gitleaks found nothing — a clean scan means nothing until this passes" >&2
+    failures=$((failures + 1))
+  fi
+  if [[ "${history_found}" -gt 0 && "${worktree_blind}" -eq 0 ]]; then
+    echo "  PASS  the history pass found a deleted secret the working-tree pass cannot see"
+  else
+    echo "  FAIL  history=${history_found} worktree=${worktree_blind} — the history pass" \
+      "must find a deleted secret, and the working-tree pass must not" >&2
     failures=$((failures + 1))
   fi
   if [[ "${semgrep_found}" -gt 0 ]]; then
