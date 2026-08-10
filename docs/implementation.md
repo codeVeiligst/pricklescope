@@ -1061,7 +1061,7 @@ Partial:
 - [x] Produce the first release notes, including installation instructions, supported configurations, known limitations, security considerations, image digests, and upgrade or migration guidance.
 - [x] Perform a clean installation using only the published documentation and release artifacts.
 - [x] Verify the production deployment, HTTPS, secure cookies, Grafana gateway, persistence, backup, restore, and rollback using the release candidate.
-- [ ] Publish the first versioned release only after all release gates have passed.
+- [x] Publish the first versioned release only after all release gates have passed.
 
 Acceptance verification, 2026-08-09:
 
@@ -1276,15 +1276,19 @@ CI found two real defects on its first runs, which is the argument for having it
   so `bash` ran an empty file, exited 0, and the check reported a pass for having
   run nothing. Caught by asking whether the file had any bytes in it.
 
-Two items are deliberately left open, and one is a judgement worth recording:
+**Milestone 11 is complete.** `v0.1.1` is published and marked latest; the
+`v0.1.0` draft was deleted rather than published, because it documented a
+deployment path that does not work and its images cannot be run by following its
+own instructions. The `v0.1.0` tag stays — it is real history, the images it
+built are still in the registry and still verifiable, and the 0.1.1 notes link a
+comparison against it.
 
-- **The first version is 0.1.0, not 1.0.0.** Four Milestone 8 items are open —
+Two things remain partial, and one is a judgement worth recording:
+
+- **The first version is 0.1.x, not 1.0.0.** Four Milestone 8 items are open —
   the controller's own health dashboards, end-to-end coverage of the primary
   journeys, the accessibility audit, and usability testing. A `1.0.0` would claim
   those were done.
-- **A clean installation from published artifacts** and **publishing the
-  release** are the two remaining gates. The draft release exists to be read by a
-  person before either happens.
 - **The Git tag is annotated, not signed**, which is why image and tag signing
   stays partial. The images are signed keylessly and verifiable by anyone; a
   signed tag needs a key the owner holds, and creating one to satisfy a checkbox
