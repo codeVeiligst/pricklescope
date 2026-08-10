@@ -299,5 +299,7 @@ corepack pnpm test:security          # 127 assertions, needs TEST_DATABASE_URL
 corepack pnpm test                   # includes the fuzzing
 ./scripts/security-scan.sh           # SAST and secrets, with self-tests
 ./scripts/scan.sh                    # dependencies and every pinned image
-./infra/verify-production-origin.sh  # TLS, cookies, gateway, exposure
+
+# TLS, cookies, gateway, exposure — needs a running production-like stack
+./infra/verify-production-origin.sh --env-file infra/.env.production --no-build
 ```

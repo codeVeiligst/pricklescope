@@ -61,9 +61,14 @@ step, so rolling the API back past a migration means restoring the database.
 Verify after any QuestDB change:
 
 ```bash
-curl -s -G http://localhost:9000/exec \
+docker compose --env-file infra/.env.production \
+  -f infra/compose.yaml -f infra/compose.production.yaml \
+  exec -T questdb curl -s -G http://127.0.0.1:9000/exec \
   --data-urlencode "query=select table_name, table_row_count from tables()"
 ```
+
+From inside the container: production publishes nothing but the gateway, so
+QuestDB's HTTP port has no host address to reach it on.
 
 The controller owns the `network_*` tables and the `_5m` and `_1h` materialized
 views. If a view is missing after an upgrade, apply the retention policy again —

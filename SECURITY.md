@@ -53,8 +53,14 @@ Security checks are part of the ordinary test suite and are runnable by anyone:
 corepack pnpm test:security          # authorization, injection, CSRF, limits, disclosure
 ./scripts/security-scan.sh           # static analysis and secret scanning, with self-tests
 ./scripts/scan.sh                    # dependency advisories and every pinned image
-./infra/verify-production-origin.sh  # TLS, cookies, gateway, and exposure
+
+# TLS, cookies, gateway, and exposure — against a deployment you have
+./infra/verify-production-origin.sh --env-file infra/.env.production --no-build
 ```
+
+The first three need nothing but a checkout. The last one needs a running
+production-like stack, because plain HTTP cannot demonstrate a `Secure` cookie;
+[docs/deployment.md](docs/deployment.md) sets one up.
 
 Every confirmed security defect gets a regression test. Findings that are accepted
 rather than fixed are written down with the reason and the condition that would

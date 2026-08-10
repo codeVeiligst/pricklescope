@@ -32,6 +32,10 @@ the integration suite. The suite refuses any database name that does not end in
 | Telegraf   | 1.39.2 Alpine | `localhost:1234`                 | Initial collector and Remote Write relay |
 | Grafana    |        13.1.3 | <http://localhost:3000/grafana/> | Visualization and alert evaluation       |
 
+Those endpoints exist **in development only**. Production publishes nothing but
+the gateway, so any command here that names a `localhost` port has to be run
+inside the container instead — see [deployment.md](deployment.md).
+
 Telegraf's bootstrap configuration stays in `config/telegraf`. PrickleScope
 publishes GUI-managed SNMP and ping inputs atomically under
 `runtime/telegraf/active`; immutable artifacts are retained under
@@ -84,21 +88,24 @@ development-only credentials live in the ignored `infra/.env` and `.env` files.
 ## QuestDB OSS backup and restore
 
 QuestDB Community Edition backup is a checkpoint plus an external copy of the
-complete QuestDB root. Create one in a new destination directory:
+complete QuestDB root. **On a deployment, use the whole-stack scripts** — they
+take all three stores in one consistent pass and are the ones
+[deployment.md](deployment.md) and [operations.md](operations.md) document:
 
 ```bash
-./infra/questdb-backup.sh /path/to/new-backup
+./infra/backup.sh /path/to/new-backup
+./infra/restore-test.sh /path/to/new-backup
 ```
 
-The script always releases the checkpoint, including after copy failure. Store
-the resulting `questdb-root` on different durable storage and protect it like the
-monitoring data it contains.
+They always release the checkpoint, including after a copy failure. Store the
+result on different durable storage and protect it like the monitoring data it
+contains.
 
-Test a backup without publishing ports or touching the live volume:
-
-```bash
-./infra/questdb-restore-test.sh /path/to/new-backup/questdb-root
-```
+`infra/questdb-backup.sh` and `infra/questdb-restore-test.sh` prototyped this
+technique during the storage spike and are **development-only**: they read
+`infra/.env`, which a production host does not have, and reach QuestDB on a host
+port that production deliberately does not publish. They cannot back up a
+deployment, and are kept only for working against the development stack.
 
 The restore test creates a uniquely named temporary volume and container, adds
 QuestDB's `_restore` marker, boots the exact pinned image with telemetry disabled
