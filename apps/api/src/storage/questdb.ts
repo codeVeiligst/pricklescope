@@ -141,6 +141,25 @@ const rawDefinitions = [
     buffer_size long,
     buffer_limit long
   ) timestamp(timestamp) partition by day ttl {raw} days wal`,
+  // The controller's own dependency sweep, one row per dependency (D-041).
+  // Written by the controller rather than collected by Telegraf, because the
+  // detail only exists behind an authenticated route and the alternative was a
+  // new unauthenticated endpoint publishing which of our internals are down.
+  //
+  // `state` is stored as text and compared as text. Grafana needs a number to
+  // threshold, and `count()` over the failing rows supplies one without a
+  // mapping table that would have to agree with the enum in two places.
+  `create table if not exists controller_health (
+    timestamp timestamp,
+    environment symbol,
+    host symbol,
+    version symbol,
+    dependency symbol,
+    state symbol,
+    critical boolean,
+    latency_ms double,
+    message varchar
+  ) timestamp(timestamp) partition by day ttl {raw} days wal`,
 ] as const
 
 const viewDefinitions = [
@@ -192,6 +211,19 @@ interface TableMetadataRow extends QueryResultRow {
   ttlUnit: string
   matView: boolean
   table_row_count: string
+}
+
+/** One dependency, as the controller found it during a sweep (D-041). */
+export interface ControllerHealthRow {
+  timestamp: Date
+  environment: string
+  host: string
+  version: string
+  dependency: string
+  state: string
+  critical: boolean
+  latencyMs: number | null
+  message: string | null
 }
 
 export interface GraphRangeQuery {
@@ -292,6 +324,41 @@ export class QuestDbClient {
   async check(): Promise<string> {
     const result = await this.pool.query<{ 'version()': string }>('select version()')
     return result.rows[0]?.['version()'] ?? 'QuestDB'
+  }
+
+  /**
+   * The only write this controller makes to QuestDB (D-041). Everything else it
+   * stores arrives through Telegraf.
+   *
+   * Columns are listed explicitly. An insert without a list has to match every
+   * column in the table, and the line protocol adds columns of its own when a
+   * collector sends a field the schema did not declare — so an unlisted insert
+   * works on a fresh table and fails on one that has been collecting.
+   */
+  async recordHealth(rows: ControllerHealthRow[]): Promise<void> {
+    if (rows.length === 0) return
+    const values: unknown[] = []
+    const tuples = rows.map((row) => {
+      const at = values.length
+      values.push(
+        row.timestamp,
+        row.environment,
+        row.host,
+        row.version,
+        row.dependency,
+        row.state,
+        row.critical,
+        row.latencyMs,
+        row.message,
+      )
+      return `($${at + 1},$${at + 2},$${at + 3},$${at + 4},$${at + 5},$${at + 6},$${at + 7},$${at + 8},$${at + 9})`
+    })
+    await this.pool.query(
+      `insert into controller_health
+         (timestamp, environment, host, version, dependency, state, critical, latency_ms, message)
+       values ${tuples.join(',')}`,
+      values,
+    )
   }
 
   async reconcile(policy: StoragePolicy): Promise<void> {

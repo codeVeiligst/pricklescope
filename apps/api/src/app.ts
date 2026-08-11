@@ -27,6 +27,7 @@ import { registerGraphRoutes } from './graphs/routes.js'
 import { GraphService } from './graphs/service.js'
 import { GrafanaService } from './grafana/service.js'
 import { GrafanaStore } from './grafana/store.js'
+import { HealthRecorder } from './health/recorder.js'
 import { HealthService } from './health/service.js'
 import { CredentialCrypto } from './inventory/credential-crypto.js'
 import { registerInventoryRoutes } from './inventory/routes.js'
@@ -371,7 +372,13 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
 
   await authStore.deleteExpiredArtifacts()
   if (config.runJobs) await runner.start()
+  // Tied to runJobs for the same reason the job runner is: one process in a
+  // deployment does the background work, and a second writing the same rows
+  // would double every count the health rules take.
+  const healthRecorder = new HealthRecorder(health, questdb, config, app.log)
+  if (config.runJobs) healthRecorder.start()
   app.addHook('onClose', async () => {
+    healthRecorder.stop()
     await runner.stop()
     await questdb?.close()
   })

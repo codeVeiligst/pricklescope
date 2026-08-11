@@ -56,6 +56,10 @@ This is not a hybrid metrics-storage architecture.
    visualizes, evaluates alerts, and routes notifications. The controller
    coordinates them rather than rebuilding their engines. It draws the graphs its
    own screens need, and Grafana keeps at least those and usually more.
+   The single exception is the controller's own dependency health, which it
+   writes to QuestDB itself (D-041) — Grafana can only alert on rows in QuestDB,
+   and the alternative was publishing an unauthenticated endpoint naming which
+   internals are down. It collects nothing from a monitored device.
 6. **Safe changes**: configuration is validated, versioned, observable, and
    reversible.
 7. **Progressive disclosure**: basic users see sensible defaults and an automatic
