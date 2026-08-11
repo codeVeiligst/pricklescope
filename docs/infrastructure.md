@@ -102,15 +102,12 @@ result on different durable storage and protect it like the monitoring data it
 contains.
 
 `infra/questdb-backup.sh` and `infra/questdb-restore-test.sh` prototyped this
-technique during the storage spike and are **development-only**: they read
-`infra/.env`, which a production host does not have, and reach QuestDB on a host
-port that production deliberately does not publish. They cannot back up a
-deployment.
-
-> **Deprecated — scheduled for removal in 0.1.2.** Use `infra/backup.sh` and
-> `infra/restore-test.sh` instead; they cover QuestDB and the other two stores in
-> one consistent pass. Nothing depends on the prototypes, and they are kept only
-> so that 0.1.1 is not changed after release.
+technique during the storage spike and were **removed after 0.1.1**. They read
+`infra/.env`, which a production host does not have, and reached QuestDB on a
+host port that production deliberately does not publish, so they could not back
+up a deployment — two ways to back up one store, one of which silently did
+nothing where it mattered. The scripts above do the same thing correctly, for all
+three stores at once.
 
 The restore test creates a uniquely named temporary volume and container, adds
 QuestDB's `_restore` marker, boots the exact pinned image with telemetry disabled

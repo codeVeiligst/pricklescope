@@ -1356,25 +1356,19 @@ Two things remain partial, and one is a judgement worth recording:
   `pull_request` and branch protection requires its four checks; that stays
   partial until a pull request actually runs them.
 
-## Deferred to 0.1.2
+## Unreleased, on `main` after 0.1.1
 
-Small things decided but deliberately not done yet, so that a released version
-is not disturbed for them. Each says what to do, not merely that something is
-wrong.
-
-- **Remove `infra/questdb-backup.sh` and `infra/questdb-restore-test.sh`.** They
-  prototyped the checkpoint-and-copy technique during the storage spike and are
-  superseded by `infra/backup.sh` and `infra/restore-test.sh`, which do the same
-  thing for all three stores and are verified against a production deployment.
-  The prototypes read `infra/.env` and reach QuestDB on a host port, so they
-  cannot back up a deployment at all — two ways to back up one store, one of
-  which silently does nothing where it matters. They are labelled development-only
-  in [infrastructure.md](infrastructure.md) for now; 0.1.1 shipped them, so the
-  removal waits for the next version rather than changing a release after the
-  fact. When it happens, update the references in
-  [infrastructure.md](infrastructure.md) and
-  [storage-spike.md](storage-spike.md) — `check-docs.sh` fails on a documented
-  script path that no longer exists, which is the reminder.
+- **Removed `infra/questdb-backup.sh` and `infra/questdb-restore-test.sh`**
+  (2026-08-11). They prototyped the checkpoint-and-copy technique during the
+  storage spike and were superseded by `infra/backup.sh` and
+  `infra/restore-test.sh`, which do the same thing for all three stores and are
+  verified against a production deployment. The prototypes read `infra/.env` and
+  reached QuestDB on a host port, so they could not back up a deployment at all —
+  two ways to back up one store, one of which silently did nothing where it
+  mattered. References in [infrastructure.md](infrastructure.md) and
+  [storage-spike.md](storage-spike.md) updated with them; `check-docs.sh` would
+  have failed on a documented script path that no longer exists, which is what
+  made the cleanup self-enforcing.
 
 ## Feature overview
 

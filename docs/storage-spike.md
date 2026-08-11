@@ -119,8 +119,10 @@ was replaced.
 
 ## OSS backup and restore
 
-The tested Community Edition procedure is implemented in
-`infra/questdb-backup.sh` and `infra/questdb-restore-test.sh`:
+The tested Community Edition procedure was prototyped here and now lives in
+`infra/backup.sh` and `infra/restore-test.sh`, which apply it to all three stores.
+The spike's own two scripts were removed after 0.1.1 — they only ever worked
+against the development stack. The procedure is unchanged:
 
 1. `CHECKPOINT CREATE`.
 2. Copy the complete QuestDB root to external storage.
