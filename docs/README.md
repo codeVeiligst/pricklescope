@@ -35,7 +35,6 @@ This index is for once you have decided to use it, run it, or work on it.
 | Document                             | What it answers                                     |
 | ------------------------------------ | --------------------------------------------------- |
 | [storage-spike.md](storage-spike.md) | Why QuestDB, and what was actually proven about it? |
-| [ideas.md](ideas.md)                 | What has been considered and not decided.           |
 
 ## Open points
 

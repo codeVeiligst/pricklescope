@@ -112,7 +112,7 @@ run them — every release names its own command, and it fails on an image that
 this project's release workflow did not build:
 
 ```bash
-cosign verify ghcr.io/codeveiligst/pricklescope/api:0.1.1 \
+cosign verify ghcr.io/codeveiligst/pricklescope/api:0.1.2 \
   --certificate-identity-regexp '(?i)^https://github\.com/codeVeiligst/pricklescope/\.github/workflows/release\.yaml@refs/tags/v.+$' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```
