@@ -1,14 +1,25 @@
-import { GRAFANA_DATASOURCE_UID, GRAFANA_FOLDER_UID } from '@pricklescope/contracts'
+import {
+  GRAFANA_DATASOURCE_UID,
+  GRAFANA_FOLDER_UID,
+  HEALTH_ALERT_CATALOGUE,
+} from '@pricklescope/contracts'
 import type {
   AlertComparison,
   AlertMetric,
   AlertReducer,
   AlertSeverity,
   ExecErrorState,
+  HealthAlertKey,
   NoDataState,
 } from '@pricklescope/contracts'
 
-import { alertMetricLabel, buildAlertQuery } from './alert-query.js'
+import {
+  HEALTH_ALERT_COMPARISON,
+  HEALTH_ALERT_REDUCER,
+  alertMetricLabel,
+  buildAlertQuery,
+  buildHealthAlertQuery,
+} from './alert-query.js'
 
 export const ALERT_RULE_GROUP = 'pricklescope'
 
@@ -50,11 +61,61 @@ const QUERY_FORMAT_TIME_SERIES = 0
  * condition, so one rule covering many sources produces one alert per source.
  */
 export function alertRuleDefinition(rule: AlertRuleInput): Record<string, unknown> {
-  const sql = buildAlertQuery(
-    rule.metric,
-    { sourceId: rule.sourceId, ifIndex: rule.ifIndex },
-    rule.lookbackSeconds,
-  )
+  return ruleDefinition({
+    uid: alertRuleUid(rule.id),
+    title: rule.name,
+    sql: buildAlertQuery(
+      rule.metric,
+      { sourceId: rule.sourceId, ifIndex: rule.ifIndex },
+      rule.lookbackSeconds,
+    ),
+    summary: `${rule.name}: ${alertMetricLabel(rule.metric)} ${
+      rule.comparison === 'gt' ? 'above' : 'below'
+    } ${rule.threshold}`,
+    description: rule.description,
+    labels: { pricklescope_rule: rule.id, severity: rule.severity },
+    seriesReducer: 'last',
+    reducer: rule.reducer,
+    comparison: rule.comparison,
+    threshold: rule.threshold,
+    recoveryThreshold: rule.recoveryThreshold,
+    evaluationIntervalSeconds: rule.evaluationIntervalSeconds,
+    pendingSeconds: rule.pendingSeconds,
+    lookbackSeconds: rule.lookbackSeconds,
+    noDataState: rule.noDataState,
+    execErrorState: rule.execErrorState,
+    contactPoint: rule.contactPoint,
+  })
+}
+
+/**
+ * The shape both kinds of rule reduce to. Extracted when the built-in health
+ * alerts arrived (D-042) rather than copied, because two hand-maintained copies
+ * of a Grafana rule pipeline would diverge and only one of them would be tested.
+ */
+interface RuleShape {
+  uid: string
+  title: string
+  sql: string
+  summary: string
+  description: string | null
+  labels: Record<string, string>
+  /** How the series is collapsed to one number before the threshold applies. */
+  seriesReducer: string
+  reducer: AlertReducer | 'sum'
+  comparison: AlertComparison
+  threshold: number
+  recoveryThreshold: number | null
+  evaluationIntervalSeconds: number
+  pendingSeconds: number
+  lookbackSeconds: number
+  noDataState: NoDataState
+  execErrorState: ExecErrorState
+  contactPoint: string | null
+}
+
+function ruleDefinition(rule: RuleShape): Record<string, unknown> {
+  const sql = rule.sql
 
   const evaluator: Record<string, unknown> = {
     type: rule.comparison,
@@ -68,7 +129,7 @@ export function alertRuleDefinition(rule: AlertRuleInput): Record<string, unknow
       evaluator,
       operator: { type: 'and' },
       query: { params: ['B'] },
-      reducer: { params: [], type: 'last' },
+      reducer: { params: [], type: rule.seriesReducer },
       type: 'query',
     },
   ]
@@ -78,8 +139,8 @@ export function alertRuleDefinition(rule: AlertRuleInput): Record<string, unknow
       : { type: rule.comparison === 'gt' ? 'lt' : 'gt', params: [rule.recoveryThreshold] }
 
   return {
-    uid: alertRuleUid(rule.id),
-    title: rule.name,
+    uid: rule.uid,
+    title: rule.title,
     ruleGroup: ALERT_RULE_GROUP,
     folderUID: GRAFANA_FOLDER_UID,
     condition: 'C',
@@ -89,14 +150,9 @@ export function alertRuleDefinition(rule: AlertRuleInput): Record<string, unknow
     execErrState: rule.execErrorState,
     isPaused: false,
     orgID: 1,
-    labels: {
-      pricklescope_rule: rule.id,
-      severity: rule.severity,
-    },
+    labels: rule.labels,
     annotations: {
-      summary: `${rule.name}: ${alertMetricLabel(rule.metric)} ${
-        rule.comparison === 'gt' ? 'above' : 'below'
-      } ${rule.threshold}`,
+      summary: rule.summary,
       ...(rule.description ? { description: rule.description } : {}),
       __pricklescope_managed__: 'true',
     },
@@ -193,4 +249,60 @@ export function contactPointDefinition(input: ContactPointInput): Record<string,
         : webhookSettings(input.url ?? '', input.secret),
     disableResolveMessage: false,
   }
+}
+
+/**
+ * A built-in health alert (D-042). Distinct uid prefix from user rules so the
+ * reconciler's sweep for orphaned `ps-alert-` rules cannot delete one, and so
+ * the drift probe can account for the two sets separately.
+ */
+export function healthAlertRuleUid(key: HealthAlertKey): string {
+  return `ps-health-${key.replace(/_/g, '-')}`
+}
+
+export interface HealthAlertRuleInput {
+  key: HealthAlertKey
+  threshold: number
+  forSeconds: number
+  contactPoint: string | null
+}
+
+const HEALTH_EVALUATION_INTERVAL_SECONDS = 60
+const HEALTH_LOOKBACK_SECONDS = 600
+
+export function healthAlertRuleDefinition(rule: HealthAlertRuleInput): Record<string, unknown> {
+  const entry = HEALTH_ALERT_CATALOGUE[rule.key]
+  const comparison = HEALTH_ALERT_COMPARISON[rule.key]
+  const unit = entry.unit === 'percent' ? '%' : entry.unit === 'seconds' ? 's' : ''
+
+  return ruleDefinition({
+    uid: healthAlertRuleUid(rule.key),
+    title: entry.label,
+    sql: buildHealthAlertQuery(rule.key, HEALTH_LOOKBACK_SECONDS),
+    summary: `${entry.label} (${comparison === 'gt' ? 'above' : 'below'} ${rule.threshold}${unit})`,
+    description: entry.description,
+    // `pricklescope_health` rather than `pricklescope_rule`: the reconciler
+    // deletes remote rules carrying the latter that it no longer owns, and these
+    // are not in that set.
+    labels: { pricklescope_health: rule.key, severity: entry.severity },
+    seriesReducer: HEALTH_ALERT_REDUCER[rule.key],
+    reducer: 'last',
+    comparison,
+    threshold: rule.threshold,
+    // No hysteresis. These are not measurements sitting near a line — a
+    // dependency is down or it is not — and a recovery threshold would only
+    // delay the all-clear.
+    recoveryThreshold: null,
+    evaluationIntervalSeconds: HEALTH_EVALUATION_INTERVAL_SECONDS,
+    pendingSeconds: rule.forSeconds,
+    lookbackSeconds: HEALTH_LOOKBACK_SECONDS,
+    // Both Alerting, and this is the load-bearing part. The controller cannot
+    // record that QuestDB is down or that it is dead itself, because both stop
+    // the write (D-041). A rule with nothing to read, or one whose datasource
+    // errors, therefore has to fire rather than go quiet — silence is the
+    // symptom, not the all-clear.
+    noDataState: 'Alerting',
+    execErrorState: 'Alerting',
+    contactPoint: rule.contactPoint,
+  })
 }

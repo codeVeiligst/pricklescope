@@ -335,3 +335,115 @@ export const AlertOverviewSchema = Type.Object({
   states: Type.Array(AlertStateSchema),
 })
 export type AlertOverview = Static<typeof AlertOverviewSchema>
+
+/**
+ * The controller's built-in health alerts (D-042).
+ *
+ * These are not composed by anyone. The failure they exist for is that a
+ * collector could stop writing, or a dependency drop, and the only way to find
+ * out was for someone to look — so they are provisioned on a fresh install and
+ * an operator chooses where they go, not whether they exist in the first place.
+ *
+ * The catalogue lives here because the settings screen renders from it and the
+ * rule builder reads the same units. The SQL stays server-side in the adapter:
+ * the browser has no business knowing the shape of the metrics store.
+ */
+export const HealthAlertKeySchema = Type.Union([
+  Type.Literal('collector_silent'),
+  Type.Literal('collector_write_errors'),
+  Type.Literal('collector_buffer'),
+  Type.Literal('dependency_down'),
+  Type.Literal('source_silent'),
+])
+export type HealthAlertKey = Static<typeof HealthAlertKeySchema>
+
+export const HEALTH_ALERT_CATALOGUE: Record<
+  HealthAlertKey,
+  {
+    label: string
+    /** What an operator loses if this is off, in one sentence. */
+    description: string
+    unit: 'count' | 'percent' | 'seconds'
+    severity: AlertSeverity
+    /** Whether the threshold is worth showing. A count of zero errors is not. */
+    adjustable: boolean
+  }
+> = {
+  collector_silent: {
+    label: 'The collector has stopped writing',
+    description:
+      'Nothing has been collected for anything. Every graph goes flat and no other alert can fire, because none of them have data to read.',
+    unit: 'count',
+    severity: 'critical',
+    adjustable: false,
+  },
+  collector_write_errors: {
+    label: 'The collector cannot write what it gathers',
+    description:
+      'Measurements are being taken and lost on the way to storage. Graphs show gaps rather than going flat, which is easy to mistake for a quiet network.',
+    unit: 'count',
+    severity: 'warning',
+    adjustable: false,
+  },
+  collector_buffer: {
+    label: 'The collector is running out of buffer',
+    description:
+      'Storage is not keeping up. The buffer is the only thing between a slow write and dropped measurements, and it has a fixed size.',
+    unit: 'percent',
+    severity: 'warning',
+    adjustable: true,
+  },
+  dependency_down: {
+    label: 'A dependency is down',
+    description:
+      'PostgreSQL, QuestDB, Grafana, or the collector is unreachable from the controller.',
+    unit: 'count',
+    severity: 'critical',
+    adjustable: false,
+  },
+  source_silent: {
+    label: 'A source has gone silent',
+    description:
+      'One device has stopped reporting while the rest carry on — a dead device, a credential that expired, or a check that no longer matches.',
+    unit: 'seconds',
+    severity: 'warning',
+    adjustable: true,
+  },
+}
+
+export const HealthAlertRuleSchema = Type.Object({
+  key: HealthAlertKeySchema,
+  enabled: Type.Boolean(),
+  threshold: Type.Number(),
+  forSeconds: Type.Integer(),
+})
+export type HealthAlertRule = Static<typeof HealthAlertRuleSchema>
+
+export const HealthAlertSettingsSchema = Type.Object({
+  // One destination for all of them. A per-rule column would let the store hold
+  // states no screen can show, which is where a lying badge comes from.
+  contactPointId: Type.Union([Type.String({ format: 'uuid' }), Type.Null()]),
+  contactPointName: Type.Union([Type.String(), Type.Null()]),
+  rules: Type.Array(HealthAlertRuleSchema),
+  updatedAt: Type.Union([Type.String({ format: 'date-time' }), Type.Null()]),
+})
+export type HealthAlertSettings = Static<typeof HealthAlertSettingsSchema>
+
+export const UpdateHealthAlertsRequestSchema = Type.Object(
+  {
+    contactPointId: NullableString({ format: 'uuid' }),
+    rules: Type.Array(
+      Type.Object(
+        {
+          key: HealthAlertKeySchema,
+          enabled: Type.Boolean(),
+          threshold: Type.Number({ minimum: 0, maximum: 86_400 }),
+          forSeconds: Type.Integer({ minimum: 0, maximum: 86_400 }),
+        },
+        { additionalProperties: false },
+      ),
+    ),
+  },
+  { additionalProperties: false },
+)
+export type UpdateHealthAlertsRequest = Static<typeof UpdateHealthAlertsRequestSchema>

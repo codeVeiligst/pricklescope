@@ -322,6 +322,21 @@ export interface AlertRuleTable {
   updated_at: GeneratedTimestamp
 }
 
+export interface HealthAlertSettingsTable {
+  settings_key: string
+  contact_point_id: string | null
+  updated_by: string | null
+  updated_at: GeneratedTimestamp
+}
+
+export interface HealthAlertRuleTable {
+  alert_key: string
+  enabled: Generated<boolean>
+  threshold: number
+  for_seconds: number
+  updated_at: GeneratedTimestamp
+}
+
 export interface Database {
   users: UserTable
   local_credentials: LocalCredentialTable
@@ -344,4 +359,6 @@ export interface Database {
   managed_grafana_resources: ManagedGrafanaResourceTable
   contact_points: ContactPointTable
   alert_rules: AlertRuleTable
+  health_alert_settings: HealthAlertSettingsTable
+  health_alert_rules: HealthAlertRuleTable
 }

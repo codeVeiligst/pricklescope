@@ -1,4 +1,4 @@
-import { ALERT_METRICS, type AlertMetric } from '@pricklescope/contracts'
+import { ALERT_METRICS, type AlertMetric, type HealthAlertKey } from '@pricklescope/contracts'
 
 // Grafana evaluates alert rules standalone, with no dashboard variables, so a
 // rule cannot reuse a panel query. The controller therefore builds concrete SQL
@@ -78,4 +78,91 @@ export function buildAlertQuery(
     `where ${filters.join(' and ')}`,
     `order by timestamp`,
   ].join('\n')
+}
+
+/**
+ * The built-in health rules (D-042). Nothing here is caller text — the key
+ * selects a fixed statement and the only interpolated values are numbers this
+ * module truncates — so these do not go through `quote`.
+ *
+ * Every query was run against a live QuestDB before it was written down. Two of
+ * them are not what they first look like:
+ *
+ *   collector_silent  counts the agent heartbeat, which is the row carrying
+ *                     `go_version`. "Neither input nor output" also matches the
+ *                     processor and parser rows, which have no error counts.
+ *   source_silent     reports the age of each source's last sample rather than
+ *                     counting samples. A source that has stopped produces no
+ *                     rows at all, so a count cannot see it: the absent series
+ *                     is the thing being detected.
+ */
+export function buildHealthAlertQuery(key: HealthAlertKey, lookbackSeconds: number): string {
+  const window = Math.trunc(lookbackSeconds)
+  const since = `timestamp >= dateadd('s', -${window}, now())`
+
+  switch (key) {
+    case 'collector_silent':
+      return [
+        `select timestamp as time, count() as "Heartbeats"`,
+        `from collector_health`,
+        `where go_version is not null and ${since}`,
+        `sample by 1m align to calendar`,
+      ].join('\n')
+
+    // Cumulative counters since the collector started, so the delta over the
+    // window is the question, not the value.
+    case 'collector_write_errors':
+      return [
+        `select timestamp as time, max(write_errors) - min(write_errors) as "Write errors"`,
+        `from collector_health`,
+        `where go_version is not null and ${since}`,
+        `sample by 1m align to calendar`,
+      ].join('\n')
+
+    case 'collector_buffer':
+      return [
+        `select timestamp as time, max(buffer_size) * 100.0 / max(buffer_limit) as "Buffer used %", output`,
+        `from collector_health`,
+        `where output is not null and buffer_limit > 0 and ${since}`,
+        `sample by 1m align to calendar`,
+      ].join('\n')
+
+    case 'dependency_down':
+      return [
+        `select timestamp as time, count() as "Failing dependencies"`,
+        `from controller_health`,
+        `where state != 'up' and ${since}`,
+        `sample by 1m align to calendar`,
+      ].join('\n')
+
+    // The window is deliberately not the lookback: a source silent for longer
+    // than the lookback would drop out of the query entirely and stop alerting
+    // at exactly the point the problem got worse.
+    case 'source_silent':
+      return [
+        `select max(timestamp) as time, source_name, datediff('s', max(timestamp), now()) as "Seconds since last sample"`,
+        `from network_availability`,
+        `where timestamp >= dateadd('h', -24, now())`,
+        `group by source_name`,
+      ].join('\n')
+  }
+}
+
+/** How each built-in rule compares its value to the threshold. */
+export const HEALTH_ALERT_COMPARISON: Record<HealthAlertKey, 'gt' | 'lt'> = {
+  collector_silent: 'lt',
+  collector_write_errors: 'gt',
+  collector_buffer: 'gt',
+  dependency_down: 'gt',
+  source_silent: 'gt',
+}
+
+/** How the series is reduced before the threshold is applied. */
+export const HEALTH_ALERT_REDUCER: Record<HealthAlertKey, 'last' | 'sum' | 'max'> = {
+  // Sum, not last: one heartbeat anywhere in the window means it is alive.
+  collector_silent: 'sum',
+  collector_write_errors: 'max',
+  collector_buffer: 'max',
+  dependency_down: 'max',
+  source_silent: 'last',
 }

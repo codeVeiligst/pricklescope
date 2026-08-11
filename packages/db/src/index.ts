@@ -11,6 +11,7 @@ import * as siteHierarchyMigration from './migrations/006_site_hierarchy.js'
 import * as grafanaIntegrationMigration from './migrations/007_grafana_integration.js'
 import * as alertingMigration from './migrations/008_alerting.js'
 import * as emailDeliveryMigration from './migrations/009_email_delivery.js'
+import * as healthAlertsMigration from './migrations/010_health_alerts.js'
 import type { Database } from './types.js'
 
 export type { Database } from './types.js'
@@ -25,6 +26,7 @@ const migrations: Record<string, Migration> = {
   '007_grafana_integration': grafanaIntegrationMigration,
   '008_alerting': alertingMigration,
   '009_email_delivery': emailDeliveryMigration,
+  '010_health_alerts': healthAlertsMigration,
 }
 
 class StaticMigrationProvider implements MigrationProvider {
