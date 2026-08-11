@@ -102,6 +102,7 @@ task-based usability tests.
 | D-038 | _plugin_ replaces _input_ in the glossary                                                       | Accepted   | The destination is user-authored plugins (D-039 defers them, it does not rule them out), and "input" is the wrong word for something a user writes and installs — it would have to be renamed the moment that lands. Plugin takes the glossary slot that input held: a plugin is the collection mechanism, a _check_ is still a plugin applied to a source. This costs nothing to adopt, which is why it is worth doing now: "input" never reached the interface, because with one implicit SNMP check per source no screen ever had to name the mechanism. The word only exists in CLAUDE.md and in Telegraf's own `[[inputs.*]]` tables, which stay as they are — that is Telegraf's vocabulary, not the product's.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | D-037 | One QuestDB table per plugin                                                                    | Accepted   | A columnar store rewards a table whose columns are known, and the product's existing strengths — per-table TTL, per-tier materialized views, the retention reconciler — all work per table and would have to be rebuilt for a single long `plugin_metric` table keyed by measurement name. The long shape never needs migrating; that is its only advantage, and it is bought by giving up rollups that can differ per measurement. Cost, and it is not small: the schema grows with the catalogue, a plugin that changes its measurement set in a later version needs a migration of the metrics store, and once user-authored plugins arrive (D-039) a plugin definition becomes something that creates a table — which is a privilege boundary that does not exist today and will need one.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | D-036 | Telegraf executes every transport; the controller never collects                                | Accepted   | REST and GraphQL are tempting to fetch from the controller — the code is a `fetch` call and the data is right there. That would make the controller a collector, which the working notes explicitly rule out ("recurring monitoring remains collector work"), and would put a per-source polling loop inside the process that also serves the API. Telegraf's `inputs.http` with a JSON parser covers both transports, keeps one collection runtime, and means plugin collection inherits the buffering, retry, and rate derivation that already exist. Cost: a plugin can only ask for what Telegraf can express, so a transport needing bespoke client logic — a device with a stateful session, say — does not fit and would force this decision open again.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| D-042 | The controller's health alerts are built in, not composed by the operator                       | Accepted   | The failure this closes is that a collector could stop writing and the only way to find out was for someone to look. An alert nobody has created yet does not fix that, so the five rules are seeded enabled by the migration and provisioned on every reconcile: a fresh installation is watching itself before anyone opens a settings screen. The operator chooses where they go and how patient each one is, not whether they exist. Cost: the conditions are the ones the product defines, and anyone with an unusual deployment cannot express their own — the pressure to make these editable will arrive, and the honest answer then is the third option from the original decision, built-ins that the rule editor can adjust, which needs reconciliation to distinguish a user's change from drift. Two smaller decisions inside it. The contact point is one shared value rather than one per rule, because a per-rule column lets the database hold five destinations no screen can show or set, and that divergence is where a lying badge comes from; splitting it later is a column and a backfill. And the drift probe hashes the rendered rule rather than a timestamp, because the shared contact point changes every rule body without touching any rule's own `updated_at` — a timestamp hash would have reported clean while Grafana still routed to the old destination, which is D-040 wearing a different hat.         |
 | D-041 | The controller writes its own health to QuestDB; everything else it stores arrives via Telegraf | Accepted   | Grafana evaluates every alert as SQL against QuestDB (D-021), so anything it is to watch has to be a row there. The controller's dependency sweep was a response body and a screen and nothing else, which is exactly why nothing watched the controller. Telegraf scraping the controller was the option that kept D-036 intact, and it fails on the facts: `/health/ready` returns only a status and a version, and it reports _degraded_ as `200 ready`, so a non-critical dependency going down is invisible to it. The per-dependency detail is behind an authenticated route, so a scrape would have meant publishing a new unauthenticated endpoint naming which of our internals are down — a new attack surface added to avoid a write the controller can already make through a pool it already holds. D-036 says the controller never _collects_, meaning from monitored devices, and that is untouched: this is the controller recording its own state, one insert of four rows every thirty seconds. Cost, and it is the interesting part: the two failures this cannot record are QuestDB being down and the controller being dead, because both stop the write. Grafana covers them from the other side — the health rules set `execErrorState` and `noDataState` to Alerting, so a rule that cannot query, or has nothing to read, fires rather than going quiet. A monitor that only reports failures it survives is not one. |
 | D-040 | A drift probe measures the thing, and never infers it from a hash that omits part of it         | Accepted   | The Grafana datasource password is deliberately left out of its content hash — a hash of a secret is not something to keep in the metadata database — which left the one piece of state the comparison could not see. When D-027 renamed the development passwords, the datasource kept the old one, every Grafana panel failed, and the badge reported "6 managed resources are current" for two days. Nothing caught it: the controller's own graphs use a different QuestDB account and kept working, and the end-to-end test checks the deep-link href without ever loading Grafana's query path. The probe now asks the datasource whether it works, cached for ten seconds so a badge on a timer does not become load on the store it reports on. Reported as pending rather than blocked, because a reconcile rewrites the datasource and clears it — verified in both directions. Cost: one Grafana call per probe, and the same reasoning now applies to any other secret a hash cannot cover.                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | D-035 | Static analysis is project rules first, community rulesets second                               | Accepted   | The free Semgrep registry is close to inert on this codebase: seventy-nine rules from `p/typescript`, `p/nodejs`, and `p/owasp-top-ten` ran against a file containing `eval(userInput)`, a shell injection, and `rejectUnauthorized: false` and reported nothing, and `p/security-audit`, `p/javascript`, and `p/command-injection` reported nothing either. They still run, because they cost nothing and did catch real supply-chain configuration gaps, but they are not the check. `scripts/semgrep-rules.yml` carries rules for the sinks this codebase actually has, most written from a finding: unquoted interpolation into rendered TOML, subprocesses, dynamic evaluation, TLS bypass. Three more were written, run, and removed for matching a benchmark CLI, a constant table list, and every deliberately public route — each duplicated a runtime test that proves the property properly, and a rule that cries wolf is one people learn to skip. Both scanners also carry a self-test, because on their first run one of them reported a clean repository while finding nothing at all. Cost: the rules cover known sinks, not unknown ones, so they need extending whenever a new kind of generated output appears.                                                                                                                                                                                                            |
@@ -783,14 +784,17 @@ were done.
 - [x] Test metadata, QuestDB, and Grafana restore procedures.
       `./infra/backup.sh` takes all three consistently; `./infra/restore-test.sh`
       restores each into throwaway containers and checks the data is really there.
-- [~] Add controller and pipeline health dashboards and alerts. **Dashboards
-  done**: the controller provisions a Pipeline health dashboard in Grafana
-  alongside Fleet overview, Interface detail, and Source detail, and its own
-  health is on System → Health plus `/health/live` and `/health/ready`.
-  **Alerts not done**: nothing watches the controller or the pipeline, so a
-  collector that stops writing or a dependency that drops is visible only to
-  someone looking. Confirmed 2026-08-09 against the live stack — the only
-  rule in Grafana was a user's own.
+- [x] Add controller and pipeline health dashboards and alerts. Completed
+      2026-08-11 (D-041, D-042). The dashboard claim below was wrong when it was
+      written — see the verification at the end of this milestone. Previously:
+      **Dashboards
+      done**: the controller provisions a Pipeline health dashboard in Grafana
+      alongside Fleet overview, Interface detail, and Source detail, and its own
+      health is on System → Health plus `/health/live` and `/health/ready`.
+      **Alerts not done**: nothing watches the controller or the pipeline, so a
+      collector that stops writing or a dependency that drops is visible only to
+      someone looking. Confirmed 2026-08-09 against the live stack — the only
+      rule in Grafana was a user's own.
 - [x] Add upgrade and rollback documentation for every pinned component.
       [upgrades.md](upgrades.md), written in Milestone 10.
 - [x] Add end-to-end tests for the primary user journeys. 54 tests across the
@@ -891,6 +895,48 @@ Defects found and fixed during this milestone:
   check probed `pg_isready` over the unix socket, which the image's temporary
   init-phase server answers before the real server restarts — it passed once and
   failed the next run for no change in the backup.
+
+Health alerting, verified against the live stack on 2026-08-11:
+
+- **"Dashboards done" was wrong.** The Pipeline health dashboard queried
+  `collector_health`, and nothing wrote it: the renderer emitted `inputs.ping`
+  and `inputs.snmp` only, and the string appeared nowhere in it. Zero rows on a
+  fresh install while Telegraf's own `internal_*` tables held thousands. The
+  dashboard drew an empty chart, permanently, and had done since it was
+  provisioned. An alert over that table would have sat in NoData forever — the
+  same defect in a louder costume, which is why the data path came first.
+- **The declared schema was fiction.** It named `component`, `state`,
+  `buffered_metrics`, and `dropped_metrics`; no Telegraf version emits any of
+  them. Because nothing wrote the table, nothing noticed. The columns now
+  declared were read off a running collector.
+- **A growth bug fell out of it.** The `internal` input lived in the bootstrap
+  configuration, so its tables were created implicitly by the line protocol and
+  the retention reconciler never saw them — twenty thousand rows in the first
+  forty minutes, without limit. Same for `inputs.mem`. Both moved into the
+  managed configuration under a table the controller owns and expires; dropping
+  the orphans reclaimed 4 GB of a 6.8 GB QuestDB root on the development stack.
+- **Controller health reaches QuestDB (D-041)** because Grafana can only alert
+  on rows there. Verified by stopping Grafana: `Grafana = down (fetch failed)`
+  recorded within one interval, recovery recorded on its own.
+- **Five rules, provisioned and firing (D-042).** The order of the verification
+  is the part that matters, because it is what catches a badge that lies: the
+  probe reported five pending, applying cleared it to clean, changing a
+  threshold made it pending again _without_ a reconcile, and applying cleared it
+  again. Then the collector was stopped — the rule fired at t+315s, just after
+  its 300-second window emptied, and cleared 30 seconds after the collector came
+  back. All five evaluate with `health=ok`.
+- **A transient proved the pending duration.** Three dependencies timed out at
+  once during the run and recovered; the rule went to Pending, not Firing.
+- **Two faults found by running it rather than reading it.** One shared 600s
+  lookback meant `collector_silent` could not detect silence until its window
+  emptied — ten minutes of blindness before the pending duration even began, a
+  fifteen-minute worst case. Lookback is per rule now. And the health rules pull
+  the shared Grafana group interval down to 60s, or a user rule evaluating every
+  300s would have slowed them to 300s with it.
+
+**Two items remain open**, and neither is code: the accessibility and WCAG 2.2 AA
+audit, and task-based usability testing. Milestone 8 is not complete until they
+are, and they are what keeps the version at `0.1.x`.
 
 Notes for later milestones:
 

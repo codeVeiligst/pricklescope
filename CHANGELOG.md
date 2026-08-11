@@ -9,6 +9,20 @@ the release workflow and is not repeated here.
 
 ## Unreleased
 
+### Added
+
+- **The controller now watches itself.** Five health alerts ship enabled and are
+  provisioned into Grafana on a fresh install: the collector has stopped
+  writing, a dependency is down, the collector cannot write what it gathers, the
+  collector is running out of buffer, and a source has gone silent.
+  **Settings → Health** chooses where they go and how patient each one is. Until
+  a contact point is chosen they evaluate and appear in Grafana without
+  notifying anyone, and the screen says so.
+- Controller dependency health is recorded in QuestDB so Grafana can evaluate
+  it. QuestDB being down and the controller being dead are the two failures this
+  cannot record, since both stop the write — so every health rule treats No Data
+  and a datasource error as Alerting. Silence is a symptom, not an all-clear.
+
 ### Fixed
 
 - **The Pipeline health dashboard had never had data.** It queried a table

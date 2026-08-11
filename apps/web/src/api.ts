@@ -10,6 +10,7 @@ import type {
   CreateSnmpCredentialRequest,
   CreateSourceRequest,
   AlertOverview,
+  UpdateHealthAlertsRequest,
   UpsertAlertRuleRequest,
   UpsertContactPointRequest,
   AlertPreview,
@@ -19,6 +20,7 @@ import type {
   InterfaceGraphs,
   InventorySnapshot,
   GrafanaOverview,
+  HealthAlertSettings,
   Job,
   SyncApplyResult,
   SyncStatus,
@@ -208,6 +210,13 @@ export const api = {
     apiRequest<void>(`/api/v1/alerts/contact-points/${id}`, { method: 'DELETE' }, csrfToken),
   testContactPoint: (id: string, csrfToken: string) =>
     apiRequest<void>(`/api/v1/alerts/contact-points/${id}/test`, { method: 'POST' }, csrfToken),
+  healthAlerts: () => apiRequest<HealthAlertSettings>('/api/v1/alerts/health'),
+  updateHealthAlerts: (request: UpdateHealthAlertsRequest, csrfToken: string) =>
+    apiRequest<HealthAlertSettings>(
+      '/api/v1/alerts/health',
+      { method: 'PUT', body: JSON.stringify(request) },
+      csrfToken,
+    ),
   reconcileAlerts: (csrfToken: string) =>
     apiRequest<Job>('/api/v1/alerts/reconcile', { method: 'POST' }, csrfToken),
   syncStatus: () => apiRequest<SyncStatus>('/api/v1/sync'),

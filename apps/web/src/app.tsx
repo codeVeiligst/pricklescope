@@ -14,6 +14,7 @@ import { DevicesPage } from './pages/devices.js'
 import { LoginPage } from './pages/login.js'
 import { OverviewPage } from './pages/overview.js'
 import { ProfilesPage } from './pages/profiles.js'
+import { HealthAlertsPage } from './pages/health-alerts.js'
 import { SettingsPage } from './pages/settings.js'
 import { SitesPage } from './pages/sites.js'
 import { StoragePage } from './pages/storage.js'
@@ -61,6 +62,7 @@ export function App() {
             <Route path="collectors" element={<CollectorsPage />} />
             <Route path="alerts" element={<AlertsPage />} />
             <Route path="contacts" element={<ContactsPage />} />
+            <Route path="health-alerts" element={<HealthAlertsPage />} />
             <Route path="storage" element={<StoragePage />} />
             <Route
               path="users"

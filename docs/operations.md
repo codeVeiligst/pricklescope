@@ -121,6 +121,32 @@ Grafana also carries a **Pipeline health** dashboard that the controller
 provisions — Telegraf's own internal metrics, ingestion rates, and write errors.
 That one lives only in Grafana; the controller does not draw it (D-019).
 
+### Alerts the controller raises about itself
+
+Everything above needs someone to look at it. These do not: five rules are
+provisioned on a fresh install, enabled, and evaluated by Grafana every 60
+seconds. **Settings → Health** chooses where they go and how patient each one is.
+
+| Check                                      | Fires when                                                   | Default   |
+| ------------------------------------------ | ------------------------------------------------------------ | --------- |
+| The collector has stopped writing          | No heartbeat for five minutes                                | after 5m  |
+| A dependency is down                       | PostgreSQL, QuestDB, Grafana, or Telegraf is unreachable     | after 2m  |
+| The collector cannot write what it gathers | Write errors increase over the window                        | after 10m |
+| The collector is running out of buffer     | Buffer above 80% of its limit                                | after 5m  |
+| A source has gone silent                   | One device stops reporting while the rest continue, over 15m | after 5m  |
+
+Until a contact is chosen they still evaluate and still show in Grafana; they
+just do not notify anyone. The screen says so rather than reporting "on".
+
+**Two failures the controller cannot report itself**, because both stop the
+write it would report them with: QuestDB being down, and the controller being
+dead (D-041). Grafana covers them from the other side — every health rule treats
+No Data and a datasource error as _Alerting_, so a rule that cannot read fires
+instead of going quiet. If you disable that, silence stops being a symptom.
+
+Changing anything here needs a **reconcile** before Grafana sees it, the same as
+every other reconciled artifact; the pending badge says when one is due.
+
 ## Routine tasks
 
 ```bash
