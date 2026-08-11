@@ -1071,6 +1071,41 @@ input:focus-visible {
   margin: 8px 0 0;
 }
 
+/* Controls that sit directly in a settings-card definition list. `.field` is what
+   normally gives a control its visible box, and there is no `.field` here — the
+   health checks put each control straight into the `dl` so a row stays one line.
+   Without this a number input renders as bare text and reads as a value rather
+   than as something you can change. */
+.settings-card dd input[type='number'],
+.settings-card dd select {
+  min-height: 34px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  padding: 0 9px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+}
+
+.settings-card dd input[type='number'] {
+  width: 92px;
+  text-align: right;
+}
+
+.settings-card dd input[type='number']:disabled,
+.settings-card dd select:disabled {
+  border-color: var(--line);
+  background: var(--surface-soft);
+  color: var(--text-faint);
+}
+
+.settings-card dd input:focus,
+.settings-card dd select:focus {
+  border-color: var(--accent);
+  outline: 0;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
 .settings-card dl > div {
   display: flex;
   min-height: 43px;

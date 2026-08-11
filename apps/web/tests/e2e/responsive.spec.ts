@@ -26,6 +26,7 @@ const SCREENS = [
   { name: 'Polling profiles', path: '/polling-profiles' },
   { name: 'Collectors', path: '/collectors' },
   { name: 'Contacts', path: '/contacts' },
+  { name: 'Health alerts', path: '/health-alerts' },
   { name: 'Storage', path: '/storage' },
   { name: 'Credentials', path: '/credentials' },
   { name: 'Users', path: '/users' },

@@ -59,7 +59,7 @@ describe('Health alerts page', () => {
     expect(await screen.findByText('The collector has stopped writing')).toBeInTheDocument()
     expect(screen.getByText('A dependency is down')).toBeInTheDocument()
     expect(screen.getByText('A source has gone silent')).toBeInTheDocument()
-    await waitFor(() => expect(screen.getByText(/4 of 5 checks on/)).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText(/4 of\s+5 checks enabled/)).toBeInTheDocument())
   })
 
   /**
@@ -70,7 +70,9 @@ describe('Health alerts page', () => {
   it('says plainly that nothing is notified until a contact is chosen', async () => {
     role.current = 'administrator'
     renderPage()
-    expect(await screen.findByText(/nothing is notified until a contact is chosen/)).toBeVisible()
+    expect(
+      await screen.findByText(/they still evaluate and appear in Grafana, but notify nobody/),
+    ).toBeVisible()
   })
 
   it('keeps the accessible page name without a visible title banner', async () => {

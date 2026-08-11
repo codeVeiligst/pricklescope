@@ -4,9 +4,9 @@ import {
   type HealthAlertKey,
   type HealthAlertRule,
 } from '@pricklescope/contracts'
-import { Button, ScreenReaderHeading } from '@pricklescope/ui'
+import { Button, ScreenReaderHeading, StatusPill } from '@pricklescope/ui'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { HeartPulse } from 'lucide-react'
+import { Activity, Database, HeartPulse, Network, PlugZap, Radio, Send } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 
 import { api } from '../api.js'
@@ -18,6 +18,12 @@ import { useDocumentTitle } from '../hooks.js'
  * The controller's own health alerts. These are not composed here — they exist
  * on a fresh install and this screen decides where they go and how patient they
  * are, because the failure they cover is that nobody was looking.
+ *
+ * Built from `settings-card` and its `dl`, like the Settings page, rather than
+ * from `resource-list-row`. The first version invented seven class names that the
+ * stylesheet does not define, so the browser laid it out with defaults: controls
+ * landed in a different column on every row and the unit sat under its input.
+ * Every class used here is one the stylesheet already has.
  */
 
 const ORDER: HealthAlertKey[] = [
@@ -28,15 +34,23 @@ const ORDER: HealthAlertKey[] = [
   'source_silent',
 ]
 
-function minutes(seconds: number): string {
-  if (seconds === 0) return 'immediately'
-  if (seconds % 60 === 0) return `${seconds / 60} min`
-  return `${seconds}s`
+const ICONS: Record<HealthAlertKey, typeof Activity> = {
+  collector_silent: Radio,
+  dependency_down: PlugZap,
+  collector_write_errors: Database,
+  collector_buffer: Activity,
+  source_silent: Network,
 }
 
-function unitSuffix(key: HealthAlertKey): string {
+const PATIENCE = [0, 120, 300, 600, 900, 1800]
+
+function patienceLabel(seconds: number): string {
+  return seconds === 0 ? 'Immediately' : `${seconds / 60} minutes`
+}
+
+function unitLabel(key: HealthAlertKey): string {
   const unit = HEALTH_ALERT_CATALOGUE[key].unit
-  return unit === 'percent' ? '%' : unit === 'seconds' ? 'seconds' : ''
+  return unit === 'percent' ? 'Above (%)' : unit === 'seconds' ? 'Silent for (s)' : 'Above'
 }
 
 export function HealthAlertsPage() {
@@ -69,9 +83,7 @@ export function HealthAlertsPage() {
       // rather than from what this browser hoped it would store.
       setEdits(null)
       await queryClient.invalidateQueries({ queryKey: ['health-alerts'] })
-      // The rules change in Grafana only on a reconcile, and the sync badge is
-      // what tells the operator that. Refresh it rather than leaving a stale
-      // "everything is current" beside a change they just made.
+      // These reach Grafana on a reconcile, and the sync badge is what says so.
       await queryClient.invalidateQueries({ queryKey: ['sync'] })
     },
   })
@@ -97,110 +109,146 @@ export function HealthAlertsPage() {
     <>
       <ScreenReaderHeading>Health alerts</ScreenReaderHeading>
       <form onSubmit={submit}>
-        <div className="resource-toolbar">
-          <p className="resource-toolbar__summary">
-            {enabledCount} of {rules.length} checks on
-            {draft?.contactPointId
-              ? ''
-              : ' — nothing is notified until a contact is chosen, though the alerts still show in Grafana'}
-          </p>
+        <section className="resource-toolbar" aria-label="Health alert tools">
+          <div>
+            <HeartPulse size={18} />
+            <span>
+              What the controller says when it cannot do its job. {enabledCount} of {rules.length}{' '}
+              checks enabled
+              {draft?.contactPointId
+                ? ''
+                : ' — with no contact chosen they still evaluate and appear in Grafana, but notify nobody'}
+            </span>
+          </div>
           {administrator && (
             <Button type="submit" disabled={save.isPending || !draft}>
               {save.isPending ? 'Saving…' : 'Save'}
             </Button>
           )}
-        </div>
+        </section>
 
         {save.error && <FormError error={save.error} />}
 
-        <article className="panel settings-card">
-          <div className="settings-card__icon">
-            <HeartPulse aria-hidden />
-          </div>
-          <div className="field">
-            <label htmlFor="health-contact">Send these to</label>
-            <select
-              id="health-contact"
-              value={draft?.contactPointId ?? ''}
-              disabled={!administrator}
-              onChange={(event) =>
-                draft && setEdits({ ...draft, contactPointId: event.target.value || null })
-              }
-            >
-              <option value="">No contact — visible in Grafana only</option>
-              {contactPoints.map((contact) => (
-                <option key={contact.id} value={contact.id}>
-                  {contact.name}
-                </option>
-              ))}
-            </select>
-            <p className="field__hint">
-              One destination for every check below. These are the controller telling you it cannot
-              do its job, so they go to whoever is responsible for the controller.
+        <section className="settings-grid">
+          <article className="panel settings-card">
+            <div className="settings-card__icon">
+              <Send size={20} />
+            </div>
+            <div>
+              <span className="eyebrow">Destination</span>
+              <h2>Send these to</h2>
+            </div>
+            <p>
+              One destination for every check. These are the controller reporting on itself, so they
+              belong with whoever looks after it — not necessarily whoever looks after the network.
             </p>
-          </div>
-        </article>
+            <dl>
+              <div>
+                <dt>Contact</dt>
+                <dd>
+                  <select
+                    aria-label="Send these to"
+                    value={draft?.contactPointId ?? ''}
+                    disabled={!administrator}
+                    onChange={(event) =>
+                      draft && setEdits({ ...draft, contactPointId: event.target.value || null })
+                    }
+                  >
+                    <option value="">Grafana only — notify nobody</option>
+                    {contactPoints.map((contact) => (
+                      <option key={contact.id} value={contact.id}>
+                        {contact.name}
+                      </option>
+                    ))}
+                  </select>
+                </dd>
+              </div>
+            </dl>
+          </article>
 
-        <ul className="resource-list">
           {ORDER.map((key) => {
             const rule = rules.find((entry) => entry.key === key)
             if (!rule) return null
             const entry = HEALTH_ALERT_CATALOGUE[key]
+            const Icon = ICONS[key]
             return (
-              <li key={key} className="resource-list-row">
-                <div className="resource-list-row__main">
-                  <label className="checkbox">
-                    <input
-                      type="checkbox"
-                      checked={rule.enabled}
-                      disabled={!administrator}
-                      onChange={(event) => update(key, { enabled: event.target.checked })}
-                    />
-                    <span>{entry.label}</span>
-                  </label>
-                  <p className="resource-list-row__detail">{entry.description}</p>
+              <article className="panel settings-card" key={key}>
+                <div className="settings-card__icon">
+                  <Icon size={20} />
                 </div>
-                <div className="resource-list-row__controls">
-                  {entry.adjustable && (
-                    <div className="field field--inline">
-                      <label htmlFor={`threshold-${key}`}>Above</label>
+                <div>
+                  <span className="eyebrow">
+                    <StatusPill tone={entry.severity === 'critical' ? 'negative' : 'warning'}>
+                      {entry.severity}
+                    </StatusPill>
+                  </span>
+                  <h2>{entry.label}</h2>
+                </div>
+                <p>{entry.description}</p>
+                <dl>
+                  <div>
+                    <dt>
+                      <label htmlFor={`enabled-${key}`}>Enabled</label>
+                    </dt>
+                    <dd>
                       <input
-                        id={`threshold-${key}`}
-                        type="number"
-                        min={0}
-                        max={86400}
-                        value={rule.threshold}
-                        disabled={!administrator || !rule.enabled}
-                        onChange={(event) =>
-                          update(key, { threshold: Number(event.target.value) || 0 })
-                        }
+                        id={`enabled-${key}`}
+                        type="checkbox"
+                        checked={rule.enabled}
+                        disabled={!administrator}
+                        onChange={(event) => update(key, { enabled: event.target.checked })}
                       />
-                      <span className="field__suffix">{unitSuffix(key)}</span>
+                    </dd>
+                  </div>
+                  {entry.adjustable && (
+                    <div>
+                      <dt>
+                        <label htmlFor={`threshold-${key}`}>{unitLabel(key)}</label>
+                      </dt>
+                      <dd>
+                        <input
+                          id={`threshold-${key}`}
+                          type="number"
+                          min={0}
+                          max={86400}
+                          value={rule.threshold}
+                          disabled={!administrator || !rule.enabled}
+                          onChange={(event) =>
+                            update(key, { threshold: Number(event.target.value) || 0 })
+                          }
+                        />
+                      </dd>
                     </div>
                   )}
-                  <div className="field field--inline">
-                    <label htmlFor={`for-${key}`}>For</label>
-                    <select
-                      id={`for-${key}`}
-                      value={rule.forSeconds}
-                      disabled={!administrator || !rule.enabled}
-                      onChange={(event) => update(key, { forSeconds: Number(event.target.value) })}
-                    >
-                      {[0, 120, 300, 600, 900, 1800].map((seconds) => (
-                        <option key={seconds} value={seconds}>
-                          {minutes(seconds)}
-                        </option>
-                      ))}
-                    </select>
+                  <div>
+                    <dt>
+                      <label htmlFor={`for-${key}`}>Wait</label>
+                    </dt>
+                    <dd>
+                      <select
+                        id={`for-${key}`}
+                        value={rule.forSeconds}
+                        disabled={!administrator || !rule.enabled}
+                        onChange={(event) =>
+                          update(key, { forSeconds: Number(event.target.value) })
+                        }
+                      >
+                        {PATIENCE.map((seconds) => (
+                          <option key={seconds} value={seconds}>
+                            {patienceLabel(seconds)}
+                          </option>
+                        ))}
+                      </select>
+                    </dd>
                   </div>
-                </div>
-              </li>
+                </dl>
+              </article>
             )
           })}
-        </ul>
+        </section>
 
         {!administrator && (
-          <p className="resource-empty__hint">
+          <p className="current-user-note">
             An administrator changes these. Where the system reports its own failures is not an
             operator&rsquo;s decision.
           </p>
