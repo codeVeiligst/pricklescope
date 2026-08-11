@@ -631,22 +631,45 @@ export function grafanaResourceDefinitions(
       'health',
       [],
       [
+        // `output is not null` selects the per-writer rows; the agent total has
+        // no buffer of its own. Both queries used to name columns Telegraf never
+        // emitted, against a table nothing wrote.
         panel(
           1,
           'Buffered metrics',
           'timeseries',
-          'select timestamp as time, buffered_metrics, component from collector_health where $__timeFilter(timestamp)',
+          'select timestamp as time, buffer_size, output from collector_health where output is not null and $__timeFilter(timestamp)',
           { x: 0, y: 0, w: 12, h: 8 },
           'short',
         ),
+        // The agent row is the only one carrying both error counts, so it is the
+        // whole collector in one series. `go_version is not null` is what selects
+        // it — "neither input nor output" also matches the processor and parser
+        // rows, which have neither and no error counts either.
         panel(
           2,
           'Pipeline errors',
           'timeseries',
-          'select timestamp as time, gather_errors as "Gather", write_errors as "Write", component from collector_health where $__timeFilter(timestamp)',
+          'select timestamp as time, gather_errors as "Gather", write_errors as "Write" from collector_health where go_version is not null and $__timeFilter(timestamp)',
           { x: 12, y: 0, w: 12, h: 8 },
           'short',
           ['Gather', 'Write'],
+        ),
+        panel(
+          3,
+          'Metrics written',
+          'timeseries',
+          'select timestamp as time, metrics_written, output from collector_health where output is not null and $__timeFilter(timestamp)',
+          { x: 0, y: 8, w: 12, h: 8 },
+          'short',
+        ),
+        panel(
+          4,
+          'Metrics dropped',
+          'timeseries',
+          'select timestamp as time, metrics_dropped, output from collector_health where output is not null and $__timeFilter(timestamp)',
+          { x: 12, y: 8, w: 12, h: 8 },
+          'short',
         ),
       ],
     ),

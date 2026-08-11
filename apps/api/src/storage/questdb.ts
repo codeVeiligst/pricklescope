@@ -95,17 +95,51 @@ const rawDefinitions = [
     ttl long,
     result_code long
   ) timestamp(timestamp) partition by day ttl {raw} days wal`,
+  // Written by the `internal` input in the managed collector configuration, and
+  // by nothing else. These columns are what Telegraf 1.39 actually emits, read
+  // off a running collector rather than taken from its documentation: the
+  // previous declaration invented `component`, `state`, `buffered_metrics`, and
+  // `dropped_metrics`, none of which any version of Telegraf produces. Nothing
+  // wrote this table at all, so nothing noticed.
+  //
+  // Five row shapes share it, told apart by which tag is set:
+  //   input      — one gathering plugin
+  //   output     — one writing plugin
+  //   processor  — one processor
+  //   type       — one parser
+  //   go_version — the agent total, and the only row carrying both error counts
+  //
+  // `go_version` is the discriminator for that last one because it is the only
+  // tag unique to it. "neither input nor output" looks like it should work and
+  // does not: the processor and parser rows have neither either.
   `create table if not exists collector_health (
     timestamp timestamp,
     environment symbol,
     collector symbol,
     host symbol,
-    component symbol,
-    state symbol,
-    buffered_metrics long,
-    dropped_metrics long,
+    version symbol,
+    go_version symbol,
+    input symbol,
+    output symbol,
+    processor symbol,
+    type symbol,
+    startup_errors long,
+    errors long,
     gather_errors long,
-    write_errors long
+    write_errors long,
+    metrics_gathered long,
+    metrics_written long,
+    metrics_dropped long,
+    metrics_rejected long,
+    metrics_filtered long,
+    metrics_added long,
+    metrics_parsed long,
+    gather_time_ns long,
+    gather_timeouts long,
+    write_time_ns long,
+    parse_time_ns long,
+    buffer_size long,
+    buffer_limit long
   ) timestamp(timestamp) partition by day ttl {raw} days wal`,
 ] as const
 

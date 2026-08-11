@@ -326,6 +326,28 @@ export function validateTelegrafDesiredState(checks: TelegrafCheckDesiredState[]
   }
 }
 
+/**
+ * Telegraf reporting on itself, which is where the health dashboard and the
+ * collector alerts get their data. Until 2026-08-11 nothing wrote
+ * `collector_health` at all, so the dashboard drew an empty chart permanently and
+ * an alert over it would have sat in NoData forever.
+ *
+ * `name_override` collapses the internal plugin's several measurements into the
+ * one controller-owned table. That matters for more than tidiness: the bootstrap
+ * configuration used to run this input unmanaged, and its `internal_*` tables
+ * were created implicitly by the line protocol, so the retention reconciler never
+ * saw them and they grew without limit — twenty thousand rows in the first forty
+ * minutes of a fresh install.
+ *
+ * No processor is involved. The rate pipeline below uses explicit `order`, and
+ * adding unordered processors alongside it would change when they run.
+ */
+const healthInput = `# Collector health. The controller owns this table, so retention applies to it.
+[[inputs.internal]]
+  collect_memstats = false
+  name_override = "collector_health"
+`
+
 /** Every table this renderer is capable of emitting. Anything else is injected. */
 const RENDERED_TABLES = new Set([
   '[[inputs.ping]]',
@@ -335,6 +357,7 @@ const RENDERED_TABLES = new Set([
   '[[inputs.snmp.field]]',
   '[[inputs.snmp.table]]',
   '[[inputs.snmp.table.field]]',
+  '[[inputs.internal]]',
   '[[processors.starlark]]',
   '[[processors.converter]]',
   '[processors.converter.fields]',
@@ -370,10 +393,12 @@ export function renderTelegrafConfig(checks: TelegrafCheckDesiredState[]): Teleg
   validateTelegrafDesiredState(checks)
   const ordered = [...checks].sort((left, right) => left.checkId.localeCompare(right.checkId))
   const header = '# Managed by PrickleScope. Manual edits will be replaced.\n\n'
-  const content =
-    header + ordered.map((check) => renderCheck(check, false)).join('\n') + `\n${rateProcessor}`
+  // The health input is unconditional: a collector with no checks yet is exactly
+  // the situation where knowing the collector is alive matters most.
+  const trailer = `\n${healthInput}\n${rateProcessor}`
+  const content = header + ordered.map((check) => renderCheck(check, false)).join('\n') + trailer
   const redactedContent =
-    header + ordered.map((check) => renderCheck(check, true)).join('\n') + `\n${rateProcessor}`
+    header + ordered.map((check) => renderCheck(check, true)).join('\n') + trailer
   validateTelegrafCandidate(content, ordered.length)
   return {
     content,

@@ -39,6 +39,8 @@ export const GRAFANA_DASHBOARDS = {
     panels: [
       { id: 1, title: 'Buffered metrics' },
       { id: 2, title: 'Pipeline errors' },
+      { id: 3, title: 'Metrics written' },
+      { id: 4, title: 'Metrics dropped' },
     ],
   },
 } as const
