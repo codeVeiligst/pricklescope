@@ -7,19 +7,26 @@ import {
   contactPointDefinition,
   GrafanaApiClient,
   ALERT_RULE_GROUP,
+  healthAlertRuleDefinition,
+  healthAlertRuleUid,
   type AlertRuleInput,
+  type HealthAlertRuleInput,
 } from '@pricklescope/adapters'
 import {
   EMAIL_PROVIDER_CONFIG_KEYS,
+  HEALTH_ALERT_CATALOGUE,
   type AlertOverview,
   type AlertPreview,
   type AlertRule,
   type ContactPoint,
   type UpsertAlertRuleRequest,
+  type HealthAlertKey,
+  type HealthAlertSettings,
+  type UpdateHealthAlertsRequest,
   type UpsertContactPointRequest,
 } from '@pricklescope/contracts'
 
-import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto'
+import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto'
 
 import type { AuthStore } from '../auth/store.js'
 import type { AppConfig } from '../config.js'
@@ -398,6 +405,85 @@ export class AlertService {
    * against that is exact: an edited rule, a new contact point, and a rule
    * disabled or deleted since the last apply all register.
    */
+  async healthAlerts(): Promise<HealthAlertSettings> {
+    const [settings, rules] = await Promise.all([
+      this.store.healthSettings(),
+      this.store.healthRules(),
+    ])
+    return {
+      contactPointId: settings.contact_point_id,
+      contactPointName: settings.contact_point_name,
+      updatedAt: settings.updated_at.toISOString(),
+      rules: rules.map((rule) => ({
+        key: rule.alert_key as HealthAlertKey,
+        enabled: rule.enabled,
+        threshold: Number(rule.threshold),
+        forSeconds: rule.for_seconds,
+      })),
+    }
+  }
+
+  async updateHealthAlerts(
+    request: UpdateHealthAlertsRequest,
+    actorUserId: string | null,
+  ): Promise<HealthAlertSettings> {
+    for (const rule of request.rules) {
+      if (!(rule.key in HEALTH_ALERT_CATALOGUE)) {
+        throw new HttpError(400, 'request_refused', `Unknown health alert: ${rule.key}`)
+      }
+    }
+    if (request.contactPointId) {
+      const contact = await this.store.contactPoint(request.contactPointId)
+      if (!contact) {
+        throw new HttpError(400, 'request_refused', 'That contact point no longer exists')
+      }
+    }
+    await this.store.saveHealthAlerts(request.contactPointId, request.rules, actorUserId)
+    await this.audit.writeAudit({
+      actorUserId,
+      action: 'alerts.health.updated',
+      resourceType: 'health_alerts',
+      resourceId: 'primary',
+      outcome: 'success',
+      metadata: { enabled: request.rules.filter((rule) => rule.enabled).length },
+    })
+    return this.healthAlerts()
+  }
+
+  /**
+   * What the controller would write for each enabled health rule, keyed by uid.
+   *
+   * The hash is of the rendered rule, not of a timestamp. The contact point is a
+   * shared setting that changes the rule body without touching any rule's own
+   * `updated_at`, so a timestamp hash would report clean while Grafana still
+   * routed to the old destination — which is D-040 exactly: a probe must measure
+   * the thing, not something adjacent to it. Hashing the body also means a change
+   * to the generated SQL in a new version shows as drift, which is correct,
+   * because it is.
+   */
+  private async healthRuleDefinitions(): Promise<Map<string, Record<string, unknown>>> {
+    const [settings, rules] = await Promise.all([
+      this.store.healthSettings(),
+      this.store.healthRules(),
+    ])
+    const wanted = new Map<string, Record<string, unknown>>()
+    for (const rule of rules) {
+      if (!rule.enabled) continue
+      const input: HealthAlertRuleInput = {
+        key: rule.alert_key as HealthAlertKey,
+        threshold: Number(rule.threshold),
+        forSeconds: rule.for_seconds,
+        contactPoint: settings.contact_point_name,
+      }
+      wanted.set(healthAlertRuleUid(input.key), healthAlertRuleDefinition(input))
+    }
+    return wanted
+  }
+
+  private static definitionHash(definition: Record<string, unknown>): string {
+    return createHash('sha256').update(JSON.stringify(definition)).digest('hex')
+  }
+
   async pendingChange(): Promise<SyncProbe> {
     const settings = await this.grafanaStore.get()
     if (!this.config.grafana.internalUrl) {
@@ -422,13 +508,25 @@ export class AlertService {
     for (const rule of rules) {
       if (rule.enabled) wanted.set(alertRuleUid(rule.id), rule.updated_at.toISOString())
     }
+    // The built-in health rules, hashed the same way the reconciler stores them.
+    // These two loops have to agree exactly; D-025 is the rule and D-040 is what
+    // happens when they do not.
+    const healthWanted = await this.healthRuleDefinitions()
+    for (const [uid, definition] of healthWanted) {
+      wanted.set(uid, AlertService.definitionHash(definition))
+    }
 
     let changed = 0
     for (const [uid, hash] of wanted) if (stored.get(uid) !== hash) changed += 1
     // Rules deleted or disabled since the last apply still sit in Grafana.
     let stale = 0
     for (const uid of stored.keys()) {
-      if ((uid.startsWith('ps-alert-') || uid.startsWith('contact-')) && !wanted.has(uid))
+      if (
+        (uid.startsWith('ps-alert-') ||
+          uid.startsWith('ps-health-') ||
+          uid.startsWith('contact-')) &&
+        !wanted.has(uid)
+      )
         stale += 1
     }
 
@@ -439,7 +537,7 @@ export class AlertService {
       pending: changed + stale > 0,
       detail: parts.length
         ? parts.join(', ')
-        : `${rules.length} rules and ${contacts.length} contact points are current`,
+        : `${rules.length} rules, ${healthWanted.size} health checks, and ${contacts.length} contact points are current`,
       lastAppliedAt: settings.applied_at,
       blocked: null,
     }
@@ -504,6 +602,33 @@ export class AlertService {
         })
       }
 
+      // The built-in health rules. Provisioned on every reconcile, so a fresh
+      // installation is watching itself without anyone opening a settings screen.
+      const healthWanted = await this.healthRuleDefinitions()
+      const healthUids = new Set(healthWanted.keys())
+      for (const key of Object.keys(HEALTH_ALERT_CATALOGUE) as HealthAlertKey[]) {
+        signal?.throwIfAborted()
+        const uid = healthAlertRuleUid(key)
+        const definition = healthWanted.get(uid)
+        if (!definition) {
+          // Disabled, so remove it rather than leaving a rule nobody can see in
+          // the interface still firing at three in the morning.
+          await client.deleteAlertRule(uid)
+          await this.grafanaStore.deleteResource(uid)
+          continue
+        }
+        await client.upsertAlertRule(uid, definition)
+        await this.grafanaStore.saveResource({
+          uid,
+          type: 'alert_rule',
+          title: HEALTH_ALERT_CATALOGUE[key].label,
+          folderUid: 'pricklescope',
+          // The rendered body, matching the probe exactly.
+          contentHash: AlertService.definitionHash(definition),
+          body: {},
+        })
+      }
+
       // Remove rules Grafana still holds that the controller no longer owns.
       const remote = await client.alertRules()
       for (const entry of remote) {
@@ -512,19 +637,39 @@ export class AlertService {
         if (uid.startsWith('ps-alert-') && labels.pricklescope_rule && !wanted.has(uid)) {
           await client.deleteAlertRule(uid)
         }
+        if (uid.startsWith('ps-health-') && labels.pricklescope_health && !healthUids.has(uid)) {
+          await client.deleteAlertRule(uid)
+        }
       }
 
       // Forget registry rows for rules and contact points that are gone. Without
       // this the registry keeps claiming resources nobody owns, which reads as
       // drift that applying can never clear.
-      const owned = new Set([...wanted, ...contacts.map((contact) => `contact-${contact.id}`)])
+      const owned = new Set([
+        ...wanted,
+        ...healthUids,
+        ...contacts.map((contact) => `contact-${contact.id}`),
+      ])
       for (const uid of (await this.grafanaStore.resourceHashes()).keys()) {
-        if ((uid.startsWith('ps-alert-') || uid.startsWith('contact-')) && !owned.has(uid)) {
+        if (
+          (uid.startsWith('ps-alert-') ||
+            uid.startsWith('ps-health-') ||
+            uid.startsWith('contact-')) &&
+          !owned.has(uid)
+        ) {
           await this.grafanaStore.deleteResource(uid)
         }
       }
 
-      if (wanted.size) await client.setRuleGroupInterval(ALERT_RULE_GROUP, interval)
+      // The health rules evaluate every 60s, so the shared group interval has to
+      // divide that as well as the user rules'. Without health rules in the
+      // minimum, a user rule at 300s would slow the health checks to 300s too.
+      if (wanted.size || healthUids.size) {
+        await client.setRuleGroupInterval(
+          ALERT_RULE_GROUP,
+          healthUids.size ? Math.min(interval, 60) : interval,
+        )
+      }
 
       await this.audit.writeAudit({
         actorUserId,
@@ -532,7 +677,11 @@ export class AlertService {
         resourceType: 'alert_rules',
         resourceId: 'all',
         outcome: 'success',
-        metadata: { rules: wanted.size, contactPoints: contacts.length },
+        metadata: {
+          rules: wanted.size,
+          healthChecks: healthUids.size,
+          contactPoints: contacts.length,
+        },
       })
 
       return this.overview()

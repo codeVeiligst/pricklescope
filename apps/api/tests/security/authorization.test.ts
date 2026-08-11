@@ -149,6 +149,7 @@ const ROUTES: RouteCase[] = [
   { method: 'GET', path: '/api/v1/alerts', access: 'viewer' },
   { method: 'GET', path: '/api/v1/alerts/rules', access: 'viewer' },
   { method: 'GET', path: '/api/v1/alerts/contact-points', access: 'viewer' },
+  { method: 'GET', path: '/api/v1/alerts/health', access: 'viewer' },
   { method: 'GET', path: '/api/v1/jobs', access: 'viewer' },
   { method: 'GET', path: `/api/v1/jobs/${uuid}`, access: 'viewer' },
   { method: 'GET', path: '/api/v1/collectors/capabilities', access: 'viewer' },
@@ -213,6 +214,14 @@ const ROUTES: RouteCase[] = [
     path: `/api/v1/collectors/telegraf/revisions/${uuid}/rollback`,
     access: 'operator',
     refusalOnly: true,
+  },
+  // Administrator, not operator: where the system's own failures get sent is
+  // not an operator's call, the same reasoning that gates /sync/apply.
+  {
+    method: 'PUT',
+    path: '/api/v1/alerts/health',
+    access: 'administrator',
+    payload: { contactPointId: null, rules: [] },
   },
   { method: 'POST', path: '/api/v1/alerts/rules', access: 'operator', payload: VALID.alertRule },
   {

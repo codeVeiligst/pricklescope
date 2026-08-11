@@ -6,9 +6,12 @@ import {
   ApiErrorSchema,
   ContactPointListSchema,
   ContactPointSchema,
+  HealthAlertSettingsSchema,
   JobSchema,
+  UpdateHealthAlertsRequestSchema,
   UpsertAlertRuleRequestSchema,
   UpsertContactPointRequestSchema,
+  type UpdateHealthAlertsRequest,
   type UpsertAlertRuleRequest,
   type UpsertContactPointRequest,
 } from '@pricklescope/contracts'
@@ -37,6 +40,7 @@ export function registerAlertRoutes(
   const { service, jobs, guards } = dependencies
   const read = [guards.authenticate, guards.authorize('viewer')]
   const operate = [guards.authenticate, guards.authorize('operator'), guards.csrf]
+  const administer = [guards.authenticate, guards.authorize('administrator'), guards.csrf]
 
   app.get(
     '/api/v1/alerts',
@@ -122,6 +126,36 @@ export function registerAlertRoutes(
         return badRequest(error)
       }
     },
+  )
+
+  // The controller's own health alerts. Reading is viewer, changing is
+  // administrator: where the system's own failures get sent is not an
+  // operator's call, and it is the same reasoning that gates /sync/apply.
+  app.get(
+    '/api/v1/alerts/health',
+    {
+      preHandler: read,
+      schema: { response: { 200: HealthAlertSettingsSchema, 401: ApiErrorSchema } },
+    },
+    () => service.healthAlerts(),
+  )
+
+  app.put<{ Body: UpdateHealthAlertsRequest }>(
+    '/api/v1/alerts/health',
+    {
+      preHandler: administer,
+      schema: {
+        body: UpdateHealthAlertsRequestSchema,
+        response: {
+          200: HealthAlertSettingsSchema,
+          400: ApiErrorSchema,
+          401: ApiErrorSchema,
+          403: ApiErrorSchema,
+        },
+      },
+    },
+    async (request) =>
+      service.updateHealthAlerts(request.body, request.auth!.user.id).catch(badRequest),
   )
 
   app.get(

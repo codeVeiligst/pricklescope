@@ -157,6 +157,25 @@ export const HEALTH_ALERT_COMPARISON: Record<HealthAlertKey, 'gt' | 'lt'> = {
   source_silent: 'gt',
 }
 
+/**
+ * How far back each rule looks. Not one shared window: `collector_silent`
+ * cannot detect silence until its window has emptied, so a ten-minute lookback
+ * would mean ten minutes of blindness before the pending duration even starts.
+ * `collector_write_errors` needs the opposite — enough window to see a counter
+ * move at all.
+ *
+ * `source_silent` asks for a fixed 24 hours inside its own SQL and ignores this,
+ * but Grafana still needs a relative range wide enough not to look absurd beside
+ * the query it is running.
+ */
+export const HEALTH_ALERT_LOOKBACK_SECONDS: Record<HealthAlertKey, number> = {
+  collector_silent: 300,
+  collector_write_errors: 900,
+  collector_buffer: 300,
+  dependency_down: 300,
+  source_silent: 86_400,
+}
+
 /** How the series is reduced before the threshold is applied. */
 export const HEALTH_ALERT_REDUCER: Record<HealthAlertKey, 'last' | 'sum' | 'max'> = {
   // Sum, not last: one heartbeat anywhere in the window means it is alive.

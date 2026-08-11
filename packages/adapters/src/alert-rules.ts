@@ -15,6 +15,7 @@ import type {
 
 import {
   HEALTH_ALERT_COMPARISON,
+  HEALTH_ALERT_LOOKBACK_SECONDS,
   HEALTH_ALERT_REDUCER,
   alertMetricLabel,
   buildAlertQuery,
@@ -268,17 +269,17 @@ export interface HealthAlertRuleInput {
 }
 
 const HEALTH_EVALUATION_INTERVAL_SECONDS = 60
-const HEALTH_LOOKBACK_SECONDS = 600
 
 export function healthAlertRuleDefinition(rule: HealthAlertRuleInput): Record<string, unknown> {
   const entry = HEALTH_ALERT_CATALOGUE[rule.key]
   const comparison = HEALTH_ALERT_COMPARISON[rule.key]
+  const lookback = HEALTH_ALERT_LOOKBACK_SECONDS[rule.key]
   const unit = entry.unit === 'percent' ? '%' : entry.unit === 'seconds' ? 's' : ''
 
   return ruleDefinition({
     uid: healthAlertRuleUid(rule.key),
     title: entry.label,
-    sql: buildHealthAlertQuery(rule.key, HEALTH_LOOKBACK_SECONDS),
+    sql: buildHealthAlertQuery(rule.key, lookback),
     summary: `${entry.label} (${comparison === 'gt' ? 'above' : 'below'} ${rule.threshold}${unit})`,
     description: entry.description,
     // `pricklescope_health` rather than `pricklescope_rule`: the reconciler
@@ -295,7 +296,7 @@ export function healthAlertRuleDefinition(rule: HealthAlertRuleInput): Record<st
     recoveryThreshold: null,
     evaluationIntervalSeconds: HEALTH_EVALUATION_INTERVAL_SECONDS,
     pendingSeconds: rule.forSeconds,
-    lookbackSeconds: HEALTH_LOOKBACK_SECONDS,
+    lookbackSeconds: lookback,
     // Both Alerting, and this is the load-bearing part. The controller cannot
     // record that QuestDB is down or that it is dead itself, because both stop
     // the write (D-041). A rule with nothing to read, or one whose datasource

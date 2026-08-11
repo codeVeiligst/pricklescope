@@ -46,6 +46,21 @@ export type StoredContactPoint = {
   updated_at: Date
 }
 
+/** The controller's built-in health alerts (D-042). */
+export type StoredHealthAlertRule = {
+  alert_key: string
+  enabled: boolean
+  threshold: number
+  for_seconds: number
+  updated_at: Date
+}
+
+export type StoredHealthAlertSettings = {
+  contact_point_id: string | null
+  contact_point_name: string | null
+  updated_at: Date
+}
+
 export class AlertStore {
   constructor(private readonly db: Kysely<Database>) {}
 
@@ -160,5 +175,63 @@ export class AlertStore {
 
   async deleteContactPoint(id: string): Promise<void> {
     await this.db.deleteFrom('contact_points').where('id', '=', id).execute()
+  }
+
+  healthRules(): Promise<StoredHealthAlertRule[]> {
+    return this.db
+      .selectFrom('health_alert_rules')
+      .select(['alert_key', 'enabled', 'threshold', 'for_seconds', 'updated_at'])
+      .orderBy('alert_key')
+      .execute()
+  }
+
+  async healthSettings(): Promise<StoredHealthAlertSettings> {
+    const row = await this.db
+      .selectFrom('health_alert_settings')
+      .leftJoin('contact_points', 'contact_points.id', 'health_alert_settings.contact_point_id')
+      .select([
+        'health_alert_settings.contact_point_id',
+        'contact_points.name as contact_point_name',
+        'health_alert_settings.updated_at',
+      ])
+      .where('settings_key', '=', 'primary')
+      .executeTakeFirst()
+    // The row is seeded by the migration. If it is gone, something removed it by
+    // hand, and reporting no contact point is safer than throwing on a read.
+    return (
+      (row as StoredHealthAlertSettings | undefined) ?? {
+        contact_point_id: null,
+        contact_point_name: null,
+        updated_at: new Date(0),
+      }
+    )
+  }
+
+  async saveHealthAlerts(
+    contactPointId: string | null,
+    rules: { key: string; enabled: boolean; threshold: number; forSeconds: number }[],
+    actorUserId: string | null,
+  ): Promise<void> {
+    await this.db.transaction().execute(async (trx) => {
+      await trx
+        .updateTable('health_alert_settings')
+        .set({ contact_point_id: contactPointId, updated_by: actorUserId, updated_at: new Date() })
+        .where('settings_key', '=', 'primary')
+        .execute()
+      // Updates only. The rows are the catalogue, seeded by the migration; an
+      // insert here would let a request invent a key that provisions nothing.
+      for (const rule of rules) {
+        await trx
+          .updateTable('health_alert_rules')
+          .set({
+            enabled: rule.enabled,
+            threshold: rule.threshold,
+            for_seconds: rule.forSeconds,
+            updated_at: new Date(),
+          })
+          .where('alert_key', '=', rule.key)
+          .execute()
+      }
+    })
   }
 }
