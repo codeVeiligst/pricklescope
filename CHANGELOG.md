@@ -9,6 +9,20 @@ the release workflow and is not repeated here.
 
 ## Unreleased
 
+### Fixed
+
+- **The Pipeline health dashboard had never had data.** It queried a table
+  nothing wrote, so it drew an empty chart permanently. Collector health is now
+  collected into `collector_health`, and the declared columns are the ones
+  Telegraf actually emits rather than four invented ones.
+- **Two tables grew without limit.** The bootstrap collector configuration ran
+  the `internal` and `mem` inputs, whose tables the line protocol created
+  implicitly — so the retention reconciler never expired them. Both inputs moved
+  into the managed configuration under a table the controller owns.
+  **Upgrading from 0.1.1 needs two one-off steps**, including recreating the
+  collector container rather than restarting it: see
+  [docs/upgrades.md](docs/upgrades.md).
+
 ### Removed
 
 - `infra/questdb-backup.sh` and `infra/questdb-restore-test.sh`. They only ever

@@ -137,6 +137,54 @@ built cleanly, scanned cleanly, and failed the moment a container started —
 `ls` showed the packages and Node could resolve none of them. **Always start the
 image, not just build it.**
 
+## Upgrading from 0.1.1 or earlier: two one-off steps
+
+**Recreate the collector container, do not just restart it.** The bootstrap
+`telegraf.conf` is bind-mounted as a single file, which pins the inode. Editing
+or shipping a new version of that file does not reach a running container — it
+keeps reading the file it started with, and `docker compose up -d` will not
+replace it, because the mount specification has not changed.
+
+```bash
+docker compose --env-file infra/.env.production \
+  -f infra/compose.yaml -f infra/compose.production.yaml \
+  up -d --force-recreate telegraf
+```
+
+Confirm it took, rather than assuming:
+
+```bash
+docker compose ... exec -T telegraf grep -c inputs.internal /etc/telegraf/telegraf.conf
+# 0 — the bootstrap file no longer collects anything
+```
+
+**Then drop the tables that were growing without limit.** Until 0.1.1 the
+bootstrap configuration ran the `internal` and `mem` inputs, whose tables the
+line protocol created implicitly. The retention reconciler only expires tables it
+declares, so these were never expired: roughly twenty thousand rows in the first
+forty minutes, forever. Collector health now lands in `collector_health`, which
+is declared and expired, so the old tables have no writer and no purpose.
+
+Check first — a count and a last-write time — then drop:
+
+```bash
+docker compose ... exec -T questdb curl -s -G http://127.0.0.1:9000/exec \
+  --data-urlencode "query=select table_name from tables() order by table_name"
+
+for t in internal_agent internal_gather internal_parser internal_process \
+         internal_write mem; do
+  docker compose ... exec -T questdb curl -s -G http://127.0.0.1:9000/exec \
+    --data-urlencode "query=drop table if exists \"$t\""
+done
+```
+
+On the development stack this reclaimed 4 GB of a 6.8 GB QuestDB root.
+
+> **Do not drop `prometheus_remote_write` without looking.** Nothing in
+> PrickleScope writes it, but the Remote Write listener is a real ingestion path
+> and anything you pointed at it landed there. It has the same missing-retention
+> problem; the difference is that the rows might be yours.
+
 ## Upgrading PrickleScope itself
 
 Change `PRICKLESCOPE_VERSION` in `infra/.env.production` and run
