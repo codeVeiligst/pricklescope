@@ -277,6 +277,8 @@ export interface ManagedGrafanaResourceTable {
   status: 'active' | 'failed'
   error: string | null
   reconciled_at: GeneratedTimestamp
+  /** The uid Grafana gave the resource, so ownership does not rest on its name. */
+  remote_uid: string | null
 }
 
 export interface ContactPointTable {

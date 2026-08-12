@@ -88,6 +88,7 @@ export class GrafanaStore {
           title: definition.title,
           folder_uid: definition.folderUid,
           content_hash: definition.contentHash,
+          remote_uid: definition.remoteUid ?? null,
           revision: 1,
           status: 'active',
           error: null,
@@ -103,6 +104,8 @@ export class GrafanaStore {
         title: definition.title,
         folder_uid: definition.folderUid,
         content_hash: definition.contentHash,
+        // Keep a uid already recorded when a caller does not supply one.
+        ...(definition.remoteUid ? { remote_uid: definition.remoteUid } : {}),
         revision: current.revision + (current.content_hash === definition.contentHash ? 0 : 1),
         status: 'active',
         error: null,
@@ -118,6 +121,16 @@ export class GrafanaStore {
    */
   async deleteResource(uid: string): Promise<void> {
     await this.db.deleteFrom('managed_grafana_resources').where('uid', '=', uid).execute()
+  }
+
+  /** The uid Grafana holds a managed resource under, or null if never recorded. */
+  async remoteUid(uid: string): Promise<string | null> {
+    const row = await this.db
+      .selectFrom('managed_grafana_resources')
+      .select('remote_uid')
+      .where('uid', '=', uid)
+      .executeTakeFirst()
+    return row?.remote_uid ?? null
   }
 
   /** uid -> stored content hash, so a caller can tell drift from a rewrite. */

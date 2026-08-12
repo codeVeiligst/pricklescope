@@ -301,10 +301,30 @@ export class GrafanaService {
       throw new Error('Grafana bootstrap access is required to create a scoped service account')
     }
     const bootstrap = GrafanaApiClient.basic(internalUrl, adminUsername, adminPassword)
-    let account = await bootstrap.findServiceAccount(serviceAccountName)
-    account = account
-      ? await bootstrap.updateServiceAccount(account.id, serviceAccountName)
-      : await bootstrap.createServiceAccount(serviceAccountName)
+    // By stored id first. Searching by name and patching whatever comes back was
+    // a privilege escalation of somebody else's resource: an operator who
+    // already had a service account called "PrickleScope provisioning" — with a
+    // deliberately limited role, or disabled — had it silently raised to Admin
+    // and re-enabled (audit finding F3).
+    let account =
+      settings.service_account_id === null
+        ? null
+        : await bootstrap.getServiceAccount(settings.service_account_id)
+
+    if (!account) {
+      const sameName = await bootstrap.findServiceAccount(serviceAccountName)
+      if (sameName) {
+        throw new Error(
+          `Grafana already has a service account named "${serviceAccountName}" that this controller did not create. ` +
+            'Rename or remove it, or restore the controller token, rather than having its role changed underneath you.',
+        )
+      }
+      account = await bootstrap.createServiceAccount(serviceAccountName)
+    } else if (account.role !== 'Admin') {
+      // Ours, by id, but no longer able to provision. Raising the role of an
+      // account this controller created is not the same as adopting a stranger's.
+      account = await bootstrap.updateServiceAccount(account.id, serviceAccountName)
+    }
     const token = await bootstrap.createServiceAccountToken(
       account.id,
       `pricklescope-controller-${Date.now()}`,

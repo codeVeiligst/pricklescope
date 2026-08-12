@@ -12,6 +12,7 @@ import * as grafanaIntegrationMigration from './migrations/007_grafana_integrati
 import * as alertingMigration from './migrations/008_alerting.js'
 import * as emailDeliveryMigration from './migrations/009_email_delivery.js'
 import * as healthAlertsMigration from './migrations/010_health_alerts.js'
+import * as grafanaRemoteUidMigration from './migrations/011_grafana_remote_uid.js'
 import type { Database } from './types.js'
 
 export type { Database } from './types.js'
@@ -27,6 +28,7 @@ const migrations: Record<string, Migration> = {
   '008_alerting': alertingMigration,
   '009_email_delivery': emailDeliveryMigration,
   '010_health_alerts': healthAlertsMigration,
+  '011_grafana_remote_uid': grafanaRemoteUidMigration,
 }
 
 class StaticMigrationProvider implements MigrationProvider {

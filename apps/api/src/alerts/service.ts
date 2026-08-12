@@ -295,9 +295,12 @@ export class AlertService {
     await this.store.deleteContactPoint(id)
     const client = await this.client()
     if (!client || !existing) return
+    // By recorded uid, never by name. Matching on the name deleted a contact
+    // point an operator had created themselves whenever it happened to share a
+    // name with one of ours (audit F3).
+    const remoteUid = await this.grafanaStore.remoteUid(`contact-${id}`)
     await this.grafanaStore.deleteResource(`contact-${id}`)
-    const remote = (await client.contactPoints()).find((item) => item.name === existing.name)
-    if (typeof remote?.uid === 'string') await client.deleteContactPoint(remote.uid)
+    if (remoteUid) await client.deleteContactPoint(remoteUid)
   }
 
   /**
@@ -555,7 +558,7 @@ export class AlertService {
       for (const contact of contacts) {
         signal?.throwIfAborted()
         const bundle = this.secretBundle(contact)
-        await client.upsertContactPoint(
+        const written = await client.upsertContactPoint(
           contactPointDefinition({
             name: contact.name,
             kind: contact.kind,
@@ -565,13 +568,25 @@ export class AlertService {
             deliveryUrl: this.deliveryUrl(contact.delivery_ref),
             deliveryToken: bundle.deliveryToken ?? null,
           }),
+          await this.grafanaStore.remoteUid(`contact-${contact.id}`),
         )
+        if (written.adopted) {
+          await this.audit.writeAudit({
+            actorUserId,
+            action: 'grafana.contact_point.adopted',
+            resourceType: 'contact_point',
+            resourceId: contact.id,
+            outcome: 'success',
+            metadata: { name: contact.name, remoteUid: written.uid },
+          })
+        }
         await this.grafanaStore.saveResource({
           uid: `contact-${contact.id}`,
           type: 'contact_point',
           title: contact.name,
           folderUid: null,
           contentHash: contact.updated_at.toISOString(),
+          remoteUid: written.uid,
           body: {},
         })
       }

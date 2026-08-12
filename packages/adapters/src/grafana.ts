@@ -39,6 +39,8 @@ export interface GrafanaDataSourceHealth {
 
 export interface GrafanaResourceDefinition {
   uid: string
+  /** The uid Grafana assigned, where the resource has one (audit F3). */
+  remoteUid?: string | null
   type: 'datasource' | 'folder' | 'dashboard' | 'alert_rule' | 'contact_point'
   title: string
   folderUid: string | null
@@ -103,6 +105,12 @@ export class GrafanaApiClient {
       `/api/serviceaccounts/search?perpage=100&page=1&query=${encodeURIComponent(name)}`,
     )
     return result.serviceAccounts.find((account) => account.name === name) ?? null
+  }
+
+  /** By id, so an account this controller created is recognised after a rename. */
+  async getServiceAccount(id: number): Promise<GrafanaServiceAccount | null> {
+    const account = await this.requestOrNull(`/api/serviceaccounts/${id}`)
+    return account === null ? null : (account as unknown as GrafanaServiceAccount)
   }
 
   createServiceAccount(name: string): Promise<GrafanaServiceAccount> {
@@ -227,13 +235,36 @@ export class GrafanaApiClient {
     return this.request('/api/v1/provisioning/contact-points')
   }
 
-  async upsertContactPoint(definition: Record<string, unknown>): Promise<void> {
-    const existing = (await this.contactPoints()).find((item) => item.name === definition.name)
-    const uid = typeof existing?.uid === 'string' ? existing.uid : null
-    await this.request(
+  /**
+   * Writes a contact point and returns the uid Grafana holds it under, so the
+   * caller can record ownership rather than re-deriving it from the name later
+   * (audit F3).
+   *
+   * `knownUid` is the uid this controller recorded when it last wrote this
+   * contact point. Given one, the name is irrelevant — which is the point: a
+   * rename updates the same remote resource instead of orphaning it, and a
+   * same-named resource somebody else created is never touched.
+   */
+  async upsertContactPoint(
+    definition: Record<string, unknown>,
+    knownUid?: string | null,
+  ): Promise<{ uid: string | null; adopted: boolean }> {
+    let uid = knownUid ?? null
+    let adopted = false
+    if (uid && !(await this.requestOrNull(`/api/v1/provisioning/contact-points/${uid}`))) {
+      // Recorded, but gone from Grafana — recreate rather than fail the reconcile.
+      uid = null
+    }
+    if (!uid) {
+      const sameName = (await this.contactPoints()).find((item) => item.name === definition.name)
+      uid = typeof sameName?.uid === 'string' ? sameName.uid : null
+      adopted = uid !== null
+    }
+    const written = await this.request<{ uid?: string }>(
       uid ? `/api/v1/provisioning/contact-points/${uid}` : '/api/v1/provisioning/contact-points',
       { method: uid ? 'PUT' : 'POST', body: uid ? { ...definition, uid } : definition },
     )
+    return { uid: uid ?? written?.uid ?? null, adopted }
   }
 
   /** Asks Grafana to deliver a test notification through this contact point. */
