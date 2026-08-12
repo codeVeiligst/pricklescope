@@ -37,4 +37,29 @@ describe('critical response validation', () => {
     respond({ pendingCount: 0, targets: [] })
     await expect(api.syncStatus()).resolves.toEqual({ pendingCount: 0, targets: [] })
   })
+
+  /**
+   * The case the first version of this suite missed. An empty `targets` array
+   * never exercises a `date-time`, and TypeBox rejects a format it has not been
+   * told about — so validation refused real responses and both screens went
+   * blank, while these tests stayed green. A payload has to carry the formats
+   * the contracts actually use for this to prove anything.
+   */
+  it('accepts the formats the server really sends', async () => {
+    const realistic = {
+      pendingCount: 1,
+      targets: [
+        {
+          key: 'storage',
+          label: 'Storage',
+          pending: false,
+          detail: 'Revision 2 is applied',
+          lastAppliedAt: '2026-08-11T09:00:00.000Z',
+          blocked: null,
+        },
+      ],
+    }
+    respond(realistic)
+    await expect(api.syncStatus()).resolves.toEqual(realistic)
+  })
 })

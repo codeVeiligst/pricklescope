@@ -1,6 +1,6 @@
 import { StorageOverviewSchema, SyncStatusSchema } from '@pricklescope/contracts'
+import { FormatRegistry, type TSchema } from '@sinclair/typebox'
 import { Value } from '@sinclair/typebox/value'
-import type { TSchema } from '@sinclair/typebox'
 
 import type {
   ApiError,
@@ -60,6 +60,25 @@ export class ApiClientError extends Error {
     this.name = 'ApiClientError'
   }
 }
+
+/**
+ * TypeBox validates a `format` only against formats registered with it, and an
+ * unregistered one fails rather than being ignored. The server validates these
+ * through Ajv, which knows them already, so the first version of this check
+ * rejected perfectly good responses — the Storage and sync screens went blank
+ * behind an error about a shape the server had produced correctly.
+ *
+ * Registered here, once, covering every format the contracts use. A validator
+ * stricter than the thing it is checking is not a safety net; it is a new bug
+ * with a reassuring name.
+ */
+const ISO_DATE_TIME = /^\d{4}-\d{2}-\d{2}[Tt]\d{2}:\d{2}:\d{2}(\.\d+)?([Zz]|[+-]\d{2}:\d{2})$/
+const UUID = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/
+
+FormatRegistry.Set('date-time', (value) => ISO_DATE_TIME.test(value))
+FormatRegistry.Set('uuid', (value) => UUID.test(value))
+FormatRegistry.Set('email', (value) => value.includes('@'))
+FormatRegistry.Set('uri', (value) => URL.canParse(value))
 
 /**
  * Checks a response against the schema the server serialises it with, for the
