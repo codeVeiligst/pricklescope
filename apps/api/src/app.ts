@@ -83,9 +83,9 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
   // This key is only sound for routes that require a session. The cookie has not
   // been validated when it is read, so an unauthenticated caller picks their own
   // bucket: rotating the value gives a fresh allowance every request. Routes that
-  // accept unauthenticated callers must key by address instead — see
-  // `addressRateLimit`, and the regression test that rotates cookies through the
-  // login route.
+  // accept unauthenticated callers must set their own `keyGenerator` returning
+  // the address — the login route and the Grafana notification callback both do,
+  // and a regression test rotates invented cookies through login to prove it.
   await app.register(rateLimit, {
     global: true,
     max: 600,
@@ -331,7 +331,9 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
       },
     ],
   ])
-  const runner = new JobRunner(jobs, handlers, config.jobs)
+  const runner = new JobRunner(jobs, handlers, config.jobs, (error, context) =>
+    app.log.error({ err: error, context }, 'background job failure'),
+  )
 
   registerSystemRoutes(app, { config, health, guards })
   registerAuthRoutes(app, { config, store: authStore, localAuth, oidc, guards })

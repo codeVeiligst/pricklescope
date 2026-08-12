@@ -16,8 +16,13 @@ be added to the threat model if it was not already there.
 
 ## Supported versions
 
-PrickleScope has not made its first release yet. Until it does, only the current
-state of the default branch is supported.
+Only the latest release is supported, together with the current state of the
+default branch. There is one maintainer and no backport branch: a fix lands on
+`main` and goes out in the next release rather than being carried back.
+
+Releases are listed at
+<https://github.com/codeVeiligst/pricklescope/releases>, and each names the exact
+commit and image digests it was built from.
 
 ## What is in scope
 

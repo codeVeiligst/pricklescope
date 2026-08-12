@@ -21,12 +21,23 @@ export class JobRunner {
     private readonly store: JobStore,
     private readonly handlers: ReadonlyMap<string, JobHandler>,
     private readonly options: { pollIntervalMs: number; concurrency: number },
+    /**
+     * Where a failure with nowhere else to go is reported. Every entry point
+     * below is fire-and-forget, so without this a rejected claim or a failed
+     * "record the failure" write became an unhandled rejection — which Node may
+     * turn into a process exit, taking the API down because the database
+     * flickered (audit F11).
+     */
+    private readonly onError: (error: unknown, context: string) => void = () => {},
   ) {}
 
   async start(): Promise<void> {
     if (this.timer) return
     await this.store.recoverInterrupted()
-    this.timer = setInterval(() => void this.tick(), this.options.pollIntervalMs)
+    this.timer = setInterval(
+      () => this.safely(this.tick(), 'job poll'),
+      this.options.pollIntervalMs,
+    )
     this.timer.unref()
     await this.tick()
   }
@@ -53,14 +64,22 @@ export class JobRunner {
         const controller = new AbortController()
         const promise = this.execute(job, controller)
         this.active.set(job.id, { controller, promise })
-        void promise.finally(() => {
-          this.active.delete(job.id)
-          void this.tick()
-        })
+        this.safely(
+          promise.finally(() => {
+            this.active.delete(job.id)
+            this.safely(this.tick(), 'job poll')
+          }),
+          `job ${job.id}`,
+        )
       }
     } finally {
       this.ticking = false
     }
+  }
+
+  /** Swallows nothing: reports, and stops the rejection escaping the process. */
+  private safely(work: Promise<unknown>, context: string): void {
+    void work.catch((error: unknown) => this.onError(error, context))
   }
 
   private async execute(job: ClaimedJob, controller: AbortController): Promise<void> {
@@ -84,7 +103,13 @@ export class JobRunner {
         : error instanceof Error
           ? error.message
           : 'Unknown job error'
-      await this.store.fail(job.id, message)
+      // The store is the thing that just failed often enough that this must not
+      // be the line that throws.
+      try {
+        await this.store.fail(job.id, message)
+      } catch (failure) {
+        this.onError(failure, `recording failure of job ${job.id}`)
+      }
     } finally {
       clearTimeout(timeout)
     }

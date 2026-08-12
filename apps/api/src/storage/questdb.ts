@@ -30,6 +30,10 @@ const rawTables = [
   'network_interface_rate',
   'network_availability',
   'collector_health',
+  // Omitted when D-041 added it, so a retention change never reached it and the
+  // storage screen did not list it: created once with the policy in force at the
+  // time, then frozen while every other table followed the policy (audit F10).
+  'controller_health',
 ] as const
 const fiveMinuteViews = ['network_interface_rate_5m', 'network_availability_5m'] as const
 const hourlyViews = ['network_interface_rate_1h', 'network_availability_1h'] as const

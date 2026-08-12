@@ -87,7 +87,7 @@ Being clear about this saves everyone time:
 - **Not clustered.** One host, one of each container. See
   [deployment size](docs/operations.md#supported-deployment-size) for the numbers
   that have actually been tested.
-- **Not released yet.** See [Maturity](#maturity).
+- **Young.** Released, but at `0.1.x` for the reasons in [Maturity](#maturity).
 
 ## Standard containers, not a platform
 
@@ -197,19 +197,26 @@ it cost.
 
 ## Maturity
 
-**Pre-release.** No version has been published yet.
+**Released, and deliberately still `0.1.x`.** The current release is on the
+[releases page](https://github.com/codeVeiligst/pricklescope/releases); each one
+names the commit and image digests it was built from.
 
 What works and has been verified against a live stack: device and credential
 management, users and OIDC, Telegraf reconciliation with rollback, QuestDB
 storage with retention and rollups, native graphs with matching Grafana
-dashboards, threshold alerting with real notification delivery, drift detection,
-a TLS production gateway, and tested backup and restore.
+dashboards, threshold alerting with real notification delivery, alerts the
+controller raises about its own health, drift detection, a TLS production
+gateway, and tested backup and restore.
 
-What is not finished: health dashboards for the controller itself, an
-accessibility audit, usability testing, and the release workflow. Milestone 8 in
+What is not finished, and why the version has not reached `1.0`: task-based
+usability testing has not been done, and **no accessibility conformance is
+claimed** — that audit was dropped from scope rather than deferred (D-043). An
+external audit in August 2026 found fifteen issues, recorded with their outcomes
+in [docs/external-audit.md](docs/external-audit.md); the ones still open are
+listed there. Milestone 8 in
 [docs/implementation.md](docs/implementation.md) lists exactly what is open.
 
-Security has been through a dedicated verification pass — 127 executable security
+Security has been through a dedicated verification pass — 130 executable security
 assertions, an OWASP ASVS 5.0 and API Top 10 assessment, static analysis, secret
 scanning, and an authenticated dynamic scan. That found a critical defect and
 three high ones, all fixed. The

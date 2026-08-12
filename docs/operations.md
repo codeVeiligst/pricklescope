@@ -79,6 +79,31 @@ they cost. Ingestion throughput is not the constraint — the same benchmark
 accepted 2.6 million rows a second — so size for disk and for QuestDB's memory,
 not for write rate.
 
+### What happens when QuestDB is unavailable
+
+The collector buffers in memory and nothing spools to disk, so an outage is a
+countdown rather than a pause.
+
+| Fleet       | Metrics per 60s poll | Buffer holds |
+| ----------- | -------------------: | ------------ |
+| 10 sources  |               ~1,000 | ~100 minutes |
+| 100 sources |              ~10,000 | ~10 minutes  |
+| 500 sources |              ~49,000 | ~2 minutes   |
+
+The row rate is the same arithmetic as the storage estimate above: two rows per
+source per poll, plus two per interface. `metric_buffer_limit` is 100,000
+metrics, and the buffer is memory belonging to the collector.
+
+**Past that, the oldest samples are dropped and do not come back.** There is no
+durable spool, and adding one is not planned for `0.1.x`. If a fleet at the
+medium tier needs to survive a longer outage than that, size the buffer up
+deliberately and account for the memory, or keep the metrics store closer to the
+collector than a restart window.
+
+Collection and flush are jittered so the fleet does not poll on one tick. That
+spreads the SNMP, CPU and ingestion load, and it means a stall meets a fraction
+of the wave rather than all of it.
+
 ### Retention is the control
 
 Disk growth is bounded by the retention policy, not by the fleet size. Three tiers

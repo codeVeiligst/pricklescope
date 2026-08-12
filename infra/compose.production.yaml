@@ -43,13 +43,20 @@ services:
     # Telegraf reads the rendered configuration the API writes, and that file is
     # mode 0600. Same uid on both containers is what makes it readable at all.
     user: '${TELEGRAF_UID:-1000}:${TELEGRAF_GID:-1000}'
+    # PostgreSQL only. The controller cannot run without its metadata store —
+    # migrations, sessions and desired state all live there — but waiting on
+    # QuestDB and Grafana meant that if either was down at restart, the API and
+    # the interface never started at all, so nobody could look at the health
+    # screen that exists to report exactly that (audit F8). They are started
+    # first and reached with retrying clients; a dependency that is down shows as
+    # down instead of preventing the controller from saying so.
     depends_on:
       postgres:
         condition: service_healthy
       questdb:
-        condition: service_healthy
+        condition: service_started
       grafana:
-        condition: service_healthy
+        condition: service_started
     environment:
       PRICKLESCOPE_NODE_ENV: production
       PRICKLESCOPE_VERSION: ${PRICKLESCOPE_VERSION:-0.0.0-dev}
