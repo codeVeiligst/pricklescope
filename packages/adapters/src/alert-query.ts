@@ -127,11 +127,16 @@ export function buildHealthAlertQuery(key: HealthAlertKey, lookbackSeconds: numb
         `sample by 1m align to calendar`,
       ].join('\n')
 
+    // Counted with a CASE rather than filtered in the WHERE clause, so a healthy
+    // minute produces a bucket holding zero instead of no bucket at all. Filtered,
+    // the series simply stopped when everything recovered, and the reducer went on
+    // reading the last failing bucket — a blip stayed "true" for the whole window
+    // and fired minutes after the dependency came back (audit F4).
     case 'dependency_down':
       return [
-        `select timestamp as time, count() as "Failing dependencies"`,
+        `select timestamp as time, sum(case when state != 'up' then 1 else 0 end) as "Failing dependencies"`,
         `from controller_health`,
-        `where state != 'up' and ${since}`,
+        `where ${since}`,
         `sample by 1m align to calendar`,
       ].join('\n')
 
@@ -140,10 +145,10 @@ export function buildHealthAlertQuery(key: HealthAlertKey, lookbackSeconds: numb
     // at exactly the point the problem got worse.
     case 'source_silent':
       return [
-        `select max(timestamp) as time, source_name, datediff('s', max(timestamp), now()) as "Seconds since last sample"`,
+        `select max(timestamp) as time, source_id, datediff('s', max(timestamp), now()) as "Seconds since last sample"`,
         `from network_availability`,
         `where timestamp >= dateadd('h', -24, now())`,
-        `group by source_name`,
+        `group by source_id`,
       ].join('\n')
   }
 }
@@ -180,8 +185,13 @@ export const HEALTH_ALERT_LOOKBACK_SECONDS: Record<HealthAlertKey, number> = {
 export const HEALTH_ALERT_REDUCER: Record<HealthAlertKey, 'last' | 'sum' | 'max'> = {
   // Sum, not last: one heartbeat anywhere in the window means it is alive.
   collector_silent: 'sum',
+  // Cumulative counters, so the window's span is the number of errors in it.
+  // Deliberately not current-state: errors that have stopped still happened, and
+  // the alert clears once they leave the window.
   collector_write_errors: 'max',
-  collector_buffer: 'max',
-  dependency_down: 'max',
+  // Current state, not the window's worst moment. `max` meant one brief spike
+  // held the condition true for the whole lookback and fired after recovery.
+  collector_buffer: 'last',
+  dependency_down: 'last',
   source_silent: 'last',
 }

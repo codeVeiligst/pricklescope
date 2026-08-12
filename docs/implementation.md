@@ -1410,6 +1410,22 @@ Two things remain partial, and one is a judgement worth recording:
 
 ## Unreleased, on `main` after 0.1.1
 
+- **An external audit (2026-08-11) found fifteen issues; see
+  [external-audit.md](external-audit.md).** What was fixed, disputed, and
+  deferred is recorded against each finding below and in D-044 onward.
+
+- **Deferred from audit F4 — silence can only be measured against what QuestDB
+  has seen.** The silent-source alert now keys on the stable `source_id` rather
+  than the mutable name, and reads current state rather than the window's worst
+  moment. Two gaps remain and cannot be closed from inside a Grafana query:
+  a source that has _never_ reported is invisible, and one silent for more than
+  24 hours drops out of the query and the alert clears — precisely as the problem
+  worsens. Closing them needs the controller to write its desired source
+  inventory into QuestDB, extending D-041 from "its own health" to "what it
+  expects to be collecting". That is a deliberate architectural step, not a query
+  fix, and the catalogue description now states the limit rather than implying
+  cover the product does not have.
+
 - **Removed `infra/questdb-backup.sh` and `infra/questdb-restore-test.sh`**
   (2026-08-11). They prototyped the checkpoint-and-copy technique during the
   storage spike and were superseded by `infra/backup.sh` and

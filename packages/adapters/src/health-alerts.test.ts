@@ -1,7 +1,7 @@
 import { HEALTH_ALERT_CATALOGUE, type HealthAlertKey } from '@pricklescope/contracts'
 import { describe, expect, it } from 'vitest'
 
-import { buildHealthAlertQuery } from './alert-query.js'
+import { HEALTH_ALERT_REDUCER, buildHealthAlertQuery } from './alert-query.js'
 import { healthAlertRuleDefinition, healthAlertRuleUid } from './alert-rules.js'
 
 const keys = Object.keys(HEALTH_ALERT_CATALOGUE) as HealthAlertKey[]
@@ -77,10 +77,27 @@ describe('built-in health alert rules', () => {
   it('detects a silent source by age rather than by counting its samples', () => {
     const sql = buildHealthAlertQuery('source_silent', 600)
     expect(sql).toContain('datediff')
-    expect(sql).toContain('group by source_name')
+    // By id, not by name. A rename produced a phantom that never reported again
+    // beside a new series that had only just started (audit F4).
+    expect(sql).toContain('group by source_id')
+    expect(sql).not.toContain('group by source_name')
     // Not scoped to the rule's lookback: a source silent for longer than the
     // window would drop out and stop alerting exactly when it got worse.
     expect(sql).toContain("dateadd('h', -24, now())")
+  })
+
+  /**
+   * Filtering the failures out in the WHERE clause meant a healthy minute
+   * produced no bucket at all, so the reducer kept reading the last failing one:
+   * a blip stayed true for the whole window and fired after recovery. Counting
+   * with a CASE keeps a zero in every bucket (audit F4).
+   */
+  it("reads the current dependency state, not the window's worst moment", () => {
+    const sql = buildHealthAlertQuery('dependency_down', 300)
+    expect(sql).toContain('case when')
+    expect(sql).not.toMatch(/where\s+state\s*!=\s*'up'/)
+    expect(HEALTH_ALERT_REDUCER.dependency_down).toBe('last')
+    expect(HEALTH_ALERT_REDUCER.collector_buffer).toBe('last')
   })
 
   it('counts a cumulative counter as a delta over the window', () => {

@@ -404,7 +404,7 @@ export const HEALTH_ALERT_CATALOGUE: Record<
   source_silent: {
     label: 'A source has gone silent',
     description:
-      'One device has stopped reporting while the rest carry on — a dead device, a credential that expired, or a check that no longer matches.',
+      'One device has stopped reporting while the rest carry on — a dead device, a credential that expired, or a check that no longer matches. Covers devices that have reported at least once in the last 24 hours; a device that has never reported, or has been silent longer than that, is not visible to this check.',
     unit: 'seconds',
     severity: 'warning',
     adjustable: true,
