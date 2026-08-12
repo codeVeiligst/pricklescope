@@ -142,23 +142,23 @@ production same-origin gateway remains a later implementation selection.
 
 ## Milestone overview
 
-| Milestone                           | Outcome                                                                 | Status      |
-| ----------------------------------- | ----------------------------------------------------------------------- | ----------- |
-| 0. Development infrastructure       | Reproducible local standard services                                    | Complete    |
-| 1. Controller foundation            | UI/API skeleton, authentication, metadata migrations, and health        | Complete    |
-| 2. Source and credential management | GUI-managed devices, credentials, profiles, and tests                   | Complete    |
-| 2.1 User and identity management    | GUI-managed users, roles, passwords, access, and sessions               | Complete    |
-| 2.2 OIDC provider management        | GUI-managed discovery, secrets, mappings, and activation                | Complete    |
-| 3. Telegraf reconciliation          | Generated configuration with safe apply and rollback                    | Complete    |
-| 4. QuestDB storage spike            | Schema, counters, TTL, rollups, and recovery proven                     | Complete    |
-| 4.1 Site hierarchy                  | Cycle-safe nested sites and subtree graph scope                         | Complete    |
-| 5. Grafana integration              | Native graphs plus matching provisioned Grafana dashboards              | Complete    |
-| 6. Threshold alerting               | GUI rules reconciled into Grafana and notifications proven              | In progress |
-| 7. Alloy adapter                    | Dropped (D-024); Telegraf covers the supported inputs                   | Dropped     |
-| 8. Hardening                        | Security, backups, observability, and release workflow                  | In progress |
-| 9. Security verification            | Executable security tests, OWASP coverage, and a signed-off report      | Complete    |
-| 10. Documentation and deployment    | A docs tree, a product README, and startup workflows for both modes     | Complete    |
-| 11. Publication and first release   | Repository, CI, release workflow, versioning; publishing is the owner's | In progress |
+| Milestone                           | Outcome                                                             | Status        |
+| ----------------------------------- | ------------------------------------------------------------------- | ------------- |
+| 0. Development infrastructure       | Reproducible local standard services                                | Complete      |
+| 1. Controller foundation            | UI/API skeleton, authentication, metadata migrations, and health    | Complete      |
+| 2. Source and credential management | GUI-managed devices, credentials, profiles, and tests               | Complete      |
+| 2.1 User and identity management    | GUI-managed users, roles, passwords, access, and sessions           | Complete      |
+| 2.2 OIDC provider management        | GUI-managed discovery, secrets, mappings, and activation            | Complete      |
+| 3. Telegraf reconciliation          | Generated configuration with safe apply and rollback                | Complete      |
+| 4. QuestDB storage spike            | Schema, counters, TTL, rollups, and recovery proven                 | Complete      |
+| 4.1 Site hierarchy                  | Cycle-safe nested sites and subtree graph scope                     | Complete      |
+| 5. Grafana integration              | Native graphs plus matching provisioned Grafana dashboards          | Complete      |
+| 6. Threshold alerting               | GUI rules reconciled into Grafana and notifications proven          | Complete      |
+| 7. Alloy adapter                    | Dropped (D-024); Telegraf covers the supported inputs               | Dropped       |
+| 8. Hardening                        | Security, backups, observability, and release workflow              | One item open |
+| 9. Security verification            | Executable security tests, OWASP coverage, and a signed-off report  | Complete      |
+| 10. Documentation and deployment    | A docs tree, a product README, and startup workflows for both modes | Complete      |
+| 11. Publication and first release   | Repository, CI, release workflow, versioning; 0.1.2 published       | Complete      |
 
 ## Milestone 0: development infrastructure
 

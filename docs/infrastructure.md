@@ -29,7 +29,7 @@ the integration suite. The suite refuses any database name that does not end in
 | ---------- | ------------: | -------------------------------- | ---------------------------------------- |
 | PostgreSQL |  17.10 Alpine | `localhost:5432`                 | Controller metadata                      |
 | QuestDB    |         9.4.3 | <http://localhost:9000>          | Metrics storage and Web Console          |
-| Telegraf   | 1.39.2 Alpine | `localhost:1234`                 | Initial collector and Remote Write relay |
+| Telegraf   | 1.39.3 Alpine | `localhost:1234`                 | Initial collector and Remote Write relay |
 | Grafana    |        13.1.3 | <http://localhost:3000/grafana/> | Visualization and alert evaluation       |
 
 Those endpoints exist **in development only**. Production publishes nothing but
@@ -61,7 +61,7 @@ defaults and must never be reused for another environment.
 ## Current bootstrap data flow
 
 ```text
-Telegraf internal metrics --------------------------> QuestDB
+Telegraf internal metrics -> collector_health in QuestDB
 
 SNMP and ping checks -> Telegraf -> QuestDB ILP/HTTP
 
@@ -147,8 +147,11 @@ After startup, open the QuestDB Web Console and list the tables:
 tables();
 ```
 
-Telegraf should create internal metric tables and the controller should own the
-`network_*` schema plus its 5-minute and hourly materialized views.
+The controller owns every table: the `network_*` schema with its 5-minute and
+hourly materialized views, plus `collector_health` and `controller_health`.
+Telegraf creates none of its own — its internal metrics are rendered into the
+managed configuration under `collector_health`, so retention applies to them.
+A table here that the controller does not declare is an orphan.
 
 ## Version updates
 

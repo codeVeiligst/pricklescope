@@ -937,8 +937,10 @@ The first milestone is complete when:
 - Counter reset handling does not create false traffic spikes.
 - Changing a polling interval updates the collector without manual file editing.
 - The GUI displays the active configuration revision and collector health.
-- The frontend embeds authenticated Grafana availability and interface traffic
-  panels for the selected device without anonymous access or URL tokens.
+- The frontend draws availability and interface traffic for the selected device
+  from its own bounded queries, and a deep link reaches the matching Grafana
+  dashboard through the authenticated gateway — without anonymous access or URL
+  tokens. Nothing is embedded (D-019).
 - Raw retention and one rollup tier can be changed through the GUI.
 - QuestDB automatically expires raw data according to the configured TTL.
 - A user can create `greater than 90% for 10 minutes` alert behavior through the

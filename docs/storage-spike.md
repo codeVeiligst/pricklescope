@@ -144,7 +144,9 @@ built-in backup command is an Enterprise feature. See
 ## Remaining integration gates
 
 Milestone 5 must reconcile Grafana's read-only data source, prove reusable
-dashboard queries, and embed panels through the authenticated gateway. Milestone
+dashboard queries, and reach them through the authenticated gateway. (Written
+before D-019 settled that PrickleScope draws its own graphs and embeds nothing;
+the gate was met by the native charts plus provisioned dashboards.) Milestone
 6 must prove Grafana alert evaluation. Milestone 7 would separately have validated Alloy
 normalization through the relay. Those gates can reopen the decision, but they do
 not invalidate the storage behaviors proven here.
