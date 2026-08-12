@@ -41,14 +41,31 @@ def audit_findings(report: dict):
         }
 
 
-# Findings PrickleScope cannot act on by changing PrickleScope. An operating-system
+# Findings PrickleScope cannot fix by changing PrickleScope. An operating-system
 # package comes from the base image, and a Go dependency compiled into Caddy,
-# Grafana, Telegraf, or QuestDB comes from that project's own build. The remedy for
-# both is the same and is not a code change: pin a newer image once its maintainer
-# publishes one, which is the procedure in infra/README.md. They are reported with
-# a count so a pin that has fallen behind is visible, and they do not fail the run
-# — a check that cannot be made to pass is a check that gets ignored.
+# Grafana, Telegraf, or QuestDB comes from that project's own build. The remedy is
+# not a code change: pin a newer image, which is the procedure in infra/README.md.
+#
+# Inherited is not the same as unactionable, and treating them as the same is what
+# an external audit caught (F6): the run reported "clean" while carrying fixed
+# Critical findings in Postgres and Telegraf. If the upstream maintainer has
+# published a fixed version, moving the pin is exactly the action the procedure
+# describes — so a fixed High or Critical blocks, and only what genuinely has no
+# fix yet is reported without failing. A check that cannot be made to pass gets
+# ignored; a check that passes while a fix is sitting there is worse.
 INHERITED_TYPES = {"gobinary", "jar", "python-pkg", "gemspec"}
+
+# Trivy leaves this empty when the maintainer has published nothing to move to.
+NO_FIX = {"", "?", None}
+ACTIONABLE_SEVERITIES = {"HIGH", "CRITICAL"}
+
+
+def actionable(finding) -> bool:
+    """An inherited finding with a published fix and a severity worth acting on."""
+    return (
+        finding.get("fixed") not in NO_FIX
+        and str(finding.get("severity", "")).upper() in ACTIONABLE_SEVERITIES
+    )
 
 
 def trivy_findings(report: dict):
@@ -87,7 +104,7 @@ def main() -> int:
     inherited = []
     for finding in extract(report):
         line = "{severity:8} {package} {installed} -> {fixed}  {id}".format(**finding)
-        if finding.get("inherited"):
+        if finding.get("inherited") and not actionable(finding):
             inherited.append(line)
             continue
         if finding["id"] in excepted:
@@ -104,11 +121,11 @@ def main() -> int:
         if allowed:
             notes.append(f"{allowed} allowed by exception")
         if inherited:
-            notes.append(f"{len(inherited)} inherited from the base image")
+            notes.append(f"{len(inherited)} inherited with no fix published")
         suffix = f" ({', '.join(notes)})" if notes else ""
         print(f"  clean{suffix}")
     elif inherited:
-        print(f"  ...and {len(inherited)} inherited from the base image")
+        print(f"  ...and {len(inherited)} inherited with no fix published")
 
     # Listed but never blocking, so a pin that has fallen behind stays visible.
     for line in inherited:

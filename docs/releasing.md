@@ -74,8 +74,12 @@ git push origin v1.1.0
 
 The tag starts `.github/workflows/release.yaml`, which:
 
-1. Re-runs every check against the tagged commit, and refuses if the tag does not
-   match `package.json`.
+1. Re-runs lint, formatting, typecheck, documentation, unit, integration and
+   security checks against the tagged commit, refuses if the tag does not match
+   `package.json` or the changelog has no entry for it, **and refuses unless the
+   pull-request pipeline has already passed for that exact commit.** The browser
+   suite and the container-image checks are not repeated here — that last
+   condition is what covers them, rather than a claim to run everything twice.
 2. Builds `api` and `web` for the tagged commit.
 3. Pushes them to `ghcr.io` tagged with the version, the major.minor, and the
    full commit SHA — never `latest` alone, so a deployment can always name an

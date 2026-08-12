@@ -62,12 +62,33 @@ jobs:
       # Nothing is published until every check a pull request faces has passed
       # against the tagged commit itself.
       - run: corepack pnpm lint
+      - run: corepack pnpm format:check
       - run: corepack pnpm typecheck
+      - run: corepack pnpm docs:check
       - run: corepack pnpm test
       - run: corepack pnpm test:integration
       - run: corepack pnpm test:security
       - run: ./scripts/security-scan.sh
       - run: ./scripts/scan.sh
+
+      # The browser suite and the container-image checks need a whole stack, and
+      # duplicating those jobs here would mean two copies to keep in step. This
+      # requires the pull-request pipeline to have already passed for *this exact
+      # commit* instead — which is what the gate always claimed to guarantee and
+      # did not: it omitted formatting, documentation and end-to-end entirely, so
+      # a directly tagged commit could publish with any of them broken (audit F7).
+      - name: The pull-request pipeline must have passed for this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          conclusion=$(gh api \
+            "repos/${GITHUB_REPOSITORY}/actions/workflows/ci.yaml/runs?head_sha=${GITHUB_SHA}&per_page=1" \
+            --jq '.workflow_runs[0].conclusion // "missing"')
+          echo "CI for ${GITHUB_SHA}: ${conclusion}"
+          if [ "$conclusion" != "success" ]; then
+            echo "::error::CI has not passed for ${GITHUB_SHA} (${conclusion}). Push the commit, let CI finish, then tag it."
+            exit 1
+          fi
 
       - name: The tag must match the declared version
         run: |
