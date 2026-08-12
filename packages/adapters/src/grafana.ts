@@ -259,13 +259,20 @@ export class GrafanaApiClient {
   ): Promise<{ uid: string | null; adopted: boolean }> {
     let uid = knownUid ?? null
     let adopted = false
+    // Whether a uid was ever recorded, which is not the same as still having one.
+    const wasRecorded = Boolean(uid)
     if (uid && !(await this.requestOrNull(`/api/v1/provisioning/contact-points/${uid}`))) {
       // Recorded, but gone from Grafana — recreate rather than fail the reconcile.
       uid = null
     }
     if (!uid) {
       const sameName = (await this.contactPoints()).find((item) => item.name === definition.name)
-      if (sameName && !previouslyWritten) {
+      // Adoption is only ever a migration: this controller wrote the contact
+      // point before uids were recorded. If a uid *was* recorded and the remote
+      // has since gone, a same-named one that appeared in its place is someone
+      // else's, and writing to it is the takeover this guard exists to stop.
+      const mayAdopt = previouslyWritten && !wasRecorded
+      if (sameName && !mayAdopt) {
         throw new Error(
           `Grafana already has a contact point named "${String(definition.name)}" that this ` +
             'controller did not create. Rename one of them; PrickleScope will not take over a ' +

@@ -45,7 +45,7 @@ Versions: Semgrep 1.145.0, gitleaks v8.30.1, Trivy 0.73.0, ZAP 2.16.1, all pinne
 by digest in the scripts that run them. Node 24.19.0, pnpm 11.20.0.
 
 Images as tested: `postgres:17.10-alpine`, `questdb/questdb:9.4.3`,
-`telegraf:1.39.2-alpine`, `grafana/grafana:13.1.3`, `caddy:2.11.4-alpine`,
+`telegraf:1.39.3-alpine`, `grafana/grafana:13.1.3`, `caddy:2.11.4-alpine`,
 `node:24.19.0-alpine`, each pinned by tag and digest in `infra/compose.yaml` and
 the two Dockerfiles.
 

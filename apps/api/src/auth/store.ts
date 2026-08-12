@@ -89,7 +89,11 @@ async function toUser(db: DatabaseExecutor, row: UserRow): Promise<User> {
 }
 
 export class AuthStore {
-  constructor(private readonly db: Kysely<Database>) {}
+  constructor(
+    private readonly db: Kysely<Database>,
+    /** Where a failure with no caller to return to is reported. */
+    private readonly onError: (error: unknown, context: string) => void = () => {},
+  ) {}
 
   async userCount(): Promise<number> {
     const result = await this.db
@@ -222,11 +226,16 @@ export class AuthStore {
       .executeTakeFirst()
     if (!row) return null
     if (Date.now() - row.last_seen_at.getTime() > 60_000) {
+      // Deliberately not awaited — a session read must not wait on a bookkeeping
+      // write — but a rejection here would have been unhandled, and this runs on
+      // every authenticated request, so a database blip made it the likeliest
+      // source of one in the whole process.
       void this.db
         .updateTable('sessions')
         .set({ last_seen_at: new Date() })
         .where('id', '=', row.id)
         .execute()
+        .catch((error: unknown) => this.onError(error, 'recording session activity'))
     }
     return {
       id: row.id,

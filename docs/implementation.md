@@ -63,9 +63,7 @@ production-like origin, the vulnerability scans, the sub-400px audit, tested
 restore procedures, end-to-end coverage, and — closed in Milestone 10 — upgrade
 documentation and deployment sizing. Building
 the origin required the same-origin production gateway (D-032), so that is now an
-artifact rather than an open selection. Four items remain: health dashboards and
-alerts, end-to-end coverage of the primary journeys, the accessibility audit, and
-task-based usability tests.
+artifact rather than an open selection.
 
 ## Decisions
 
@@ -1416,6 +1414,26 @@ Two things remain partial, and one is a judgement worth recording:
 - **An external audit (2026-08-11) found fifteen issues; see
   [external-audit.md](external-audit.md).** What was fixed, disputed, and
   deferred is recorded against each finding below and in D-044 onward.
+
+- **Image pins reviewed and moved where a move existed (2026-08-12).** The audit's
+  F6 asked for the fixed High and Critical findings to be triaged rather than
+  inherited silently. Doing it produced a distinction neither the audit nor I had
+  drawn: Trivy's "fixed version" says the _package_ has a fix, not that a
+  _rebuilt image_ exists.
+
+  Every pin was already at the newest digest its tag resolved to —
+  `postgres:17.10-alpine`, `questdb/questdb:9.4.3`, `grafana/grafana:13.1.3`,
+  `caddy:2.11.4-alpine`, `node:24.19.0-alpine` all unchanged. Telegraf was the
+  one real move: **1.39.2 → 1.39.3**, tag and digest together, which cleared all
+  five of its findings including CVE-2026-49980, the one the audit named by
+  number. Verified running: 1.39.3 collecting, 90 rows into `collector_health`
+  in two minutes.
+
+  Twenty-five identifiers remain excepted across postgres, questdb, grafana and
+  the web image. None can be closed by pinning today, and the exceptions file now
+  says that instead of implying a bump is pending — with the command to re-check
+  when a maintainer rebuilds. That is the honest state: the gate blocks anything
+  new, and what is left is waiting on other people's release cadence.
 
 - **Agreed but not fixed, from the same audit.** Each is real; each needs work I
   could not verify in that pass, and shipping an unverified fix in these places

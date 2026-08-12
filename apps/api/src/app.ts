@@ -198,7 +198,9 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
     }
   })
 
-  const authStore = new AuthStore(metadata.db)
+  const authStore = new AuthStore(metadata.db, (error, context) =>
+    app.log.error({ err: error, context }, 'background write failure'),
+  )
   const userManagement = new UserManagementService(metadata.db, authStore)
   const localAuth = await LocalAuthService.create(authStore, config)
   const oidcSettings = new OidcSettingsService(metadata.db, authStore, config)

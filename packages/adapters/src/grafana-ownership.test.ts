@@ -63,6 +63,31 @@ describe('Grafana contact point ownership', () => {
     expect(calls.some((call) => call.url === '/api/v1/provisioning/contact-points')).toBe(false)
   })
 
+  /**
+   * The hole the audit's third pass found. A recorded uid that has vanished used
+   * to fall through to name matching with "we wrote this before" still true, so
+   * a same-named contact point that appeared in its place — somebody else's —
+   * was written to. Adoption is only ever a migration from before uids existed.
+   */
+  it('never adopts a same-named stranger after its own remote has vanished', async () => {
+    const { api, calls } = client({
+      '/api/v1/provisioning/contact-points/ours-gone': () => json({ message: 'gone' }, 404),
+      '/api/v1/provisioning/contact-points': (init) =>
+        init?.method === 'POST' ? json({ uid: 'fresh' }) : json([{ uid: 'theirs', name: 'Ops' }]),
+    })
+
+    // Refusing, not silently recreating: Grafana requires contact-point names to
+    // be unique, so a second "Ops" is not available anyway. Saying which name
+    // collides is the only useful outcome.
+    await expect(api.upsertContactPoint({ name: 'Ops' }, 'ours-gone', true)).rejects.toThrow(
+      /did not create/,
+    )
+    expect(
+      calls.some((call) => call.url.endsWith('/theirs')),
+      'wrote to a contact point it did not create',
+    ).toBe(false)
+  })
+
   it('recreates when the recorded uid has been deleted in Grafana', async () => {
     const { api } = client({
       '/api/v1/provisioning/contact-points/gone': () => json({ message: 'not found' }, 404),

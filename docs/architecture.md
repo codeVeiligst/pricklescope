@@ -898,7 +898,8 @@ part of the domain model, so remote execution does not change the user workflow.
 2. Authenticate without exposing provider tokens to the React application.
 3. Enter the same application shell with capabilities derived from the assigned
    Viewer, Operator, or Administrator role.
-4. Open an embedded graph without encountering a second Grafana login prompt.
+4. Open a graph PrickleScope draws, and follow a deep link into Grafana without
+   meeting a second login prompt.
 
 ### Add an SNMP device
 
@@ -908,7 +909,7 @@ part of the domain model, so remote execution does not change the user workflow.
 4. Use the recommended generic profile or select a vendor profile.
 5. Leave collector selection on **Auto** or choose a supported collector.
 6. Test connectivity and preview discovered system and interface information.
-7. Save and view the embedded device graphs, or open the dashboard in Grafana.
+7. Save, view the graphs on the device page, or open the dashboard in Grafana.
 
 ### Add a threshold alert
 
