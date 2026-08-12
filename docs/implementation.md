@@ -1414,6 +1414,29 @@ Two things remain partial, and one is a judgement worth recording:
   [external-audit.md](external-audit.md).** What was fixed, disputed, and
   deferred is recorded against each finding below and in D-044 onward.
 
+- **Agreed but not fixed, from the same audit.** Each is real; each needs work I
+  could not verify in that pass, and shipping an unverified fix in these places
+  is worse than a recorded gap.
+
+  - **F6, the Grafana plugin (`GF_PLUGINS_PREINSTALL_SYNC`).** It is installed
+    when the container starts, so the scanned image and its SBOM describe
+    something other than what runs. The fix is a derived Grafana image with the
+    plugin baked in, which changes the runtime stack and has to be proven to load
+    with no network at start.
+  - **F9, collector reload acknowledgement.** The controller writes the
+    configuration atomically and marks it active immediately. Nothing confirms
+    Telegraf accepted or reloaded it, so a rejected file reads as current. Needs
+    validation against the pinned binary and an applied-revision signal to watch.
+  - **F12, Counter32 interfaces.** Collection renders `ifHCInOctets` and
+    `ifHCOutOctets` only, while discovery tolerates a missing `ifXTable` — so a
+    legacy agent is onboarded successfully and then produces no traffic graph at
+    all. The fallback needs 32-bit wrap handling in the rate processor, and
+    getting counter arithmetic wrong is worse than the current honest gap. It
+    wants a legacy SNMP fixture first.
+  - **F15, runtime response validation.** The error boundary is done; blanket
+    schema validation of every response is not, and I am not convinced it should
+    be. See the disagreements below.
+
 - **Deferred from audit F4 — silence can only be measured against what QuestDB
   has seen.** The silent-source alert now keys on the stable `source_id` rather
   than the mutable name, and reads current state rather than the window's worst
