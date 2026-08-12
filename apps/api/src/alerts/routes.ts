@@ -16,7 +16,7 @@ import {
   type UpsertContactPointRequest,
 } from '@pricklescope/contracts'
 import { Type } from '@sinclair/typebox'
-import type { FastifyInstance } from 'fastify'
+import type { FastifyInstance, FastifyRequest } from 'fastify'
 
 import type { AuthGuards } from '../auth/guards.js'
 import { HttpError } from '../errors.js'
@@ -235,7 +235,15 @@ export function registerAlertRoutes(
   app.post<{ Params: { ref: string }; Body: GrafanaNotification }>(
     '/api/v1/alerts/notify/:ref',
     {
-      config: { rateLimit: { max: 120, timeWindow: '1 minute' } },
+      // Address, for the same reason as the login route: this endpoint has no
+      // session, so the global key would let a caller choose their own bucket.
+      config: {
+        rateLimit: {
+          max: 120,
+          timeWindow: '1 minute',
+          keyGenerator: (request: FastifyRequest) => `notify:${request.ip}`,
+        },
+      },
       schema: {
         params: Type.Object({ ref: Type.String({ format: 'uuid' }) }),
         body: Type.Unknown(),

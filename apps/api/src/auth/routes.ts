@@ -9,7 +9,7 @@ import {
   type LoginRequest,
 } from '@pricklescope/contracts'
 import { Type } from '@sinclair/typebox'
-import type { FastifyInstance } from 'fastify'
+import type { FastifyInstance, FastifyRequest } from 'fastify'
 
 import type { AppConfig } from '../config.js'
 import type { AuthGuards } from './guards.js'
@@ -65,7 +65,17 @@ export function registerAuthRoutes(
   app.post<{ Body: LoginRequest }>(
     '/api/v1/auth/login',
     {
-      config: { rateLimit: { max: 5, timeWindow: '1 minute' } },
+      // Address, not the global session key. An unauthenticated caller supplies
+      // their own cookie, so the global key let a rotating value buy a fresh
+      // allowance every attempt — five guesses per made-up cookie, which is no
+      // limit at all.
+      config: {
+        rateLimit: {
+          max: 5,
+          timeWindow: '1 minute',
+          keyGenerator: (request: FastifyRequest) => `login:${request.ip}`,
+        },
+      },
       schema: {
         body: LoginRequestSchema,
         response: { 200: AuthSessionSchema, 401: ApiErrorSchema },

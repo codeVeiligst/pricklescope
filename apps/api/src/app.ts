@@ -76,10 +76,16 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
   // stack. Routes that cost more than a metadata read set their own below this.
   //
   // Keyed by session where there is one, so users behind one NAT are counted
-  // apart, and by address otherwise, which is what the login and notification
-  // limits need. The limiter runs on `onRequest`, before `authenticate` has
-  // resolved the session, so the cookie is read directly — and hashed, because
-  // the key ends up in the limiter's store.
+  // apart, and by address otherwise. The limiter runs on `onRequest`, before
+  // `authenticate` has resolved the session, so the cookie is read directly —
+  // and hashed, because the key ends up in the limiter's store.
+  //
+  // This key is only sound for routes that require a session. The cookie has not
+  // been validated when it is read, so an unauthenticated caller picks their own
+  // bucket: rotating the value gives a fresh allowance every request. Routes that
+  // accept unauthenticated callers must key by address instead — see
+  // `addressRateLimit`, and the regression test that rotates cookies through the
+  // login route.
   await app.register(rateLimit, {
     global: true,
     max: 600,

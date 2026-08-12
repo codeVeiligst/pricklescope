@@ -152,6 +152,10 @@ export class OidcService {
         displayName: stringClaim(claims, 'name') ?? requestedUsername,
         email,
         role: roleFromOidcClaims(claims, settings),
+        // Only let the provider govern the role when a group is actually mapped.
+        // With none mapped the mapping always answers `viewer`, so synchronising
+        // would demote every OIDC user on their next sign-in.
+        roleFromProvider: Boolean(settings.adminGroup ?? settings.operatorGroup),
         claims,
       },
       settings.jitProvisioning,

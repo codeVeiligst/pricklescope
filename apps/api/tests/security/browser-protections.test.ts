@@ -284,6 +284,33 @@ suite('browser-facing protections', () => {
       expect(statuses, 'a throttled attempt was reported as a server fault').not.toContain(500)
     }, 30_000)
 
+    /**
+     * The bypass an external audit found on 2026-08-11. The global limiter keys
+     * by the session cookie when one is present, and it reads that cookie before
+     * anything has validated it — so an unauthenticated caller picks their own
+     * bucket, and a fresh made-up value buys another five guesses. Twenty
+     * attempts with twenty cookies returned twenty 401s and no 429.
+     */
+    it('cannot be bypassed by rotating an invented session cookie', async () => {
+      const statuses: number[] = []
+      for (let index = 0; index < 20; index += 1) {
+        const response = await raw({
+          method: 'POST',
+          url: '/api/v1/auth/login',
+          headers: {
+            origin: harness.appOrigin,
+            cookie: `pricklescope_session=invented-${index}`,
+          },
+          payload: { username: harness.credentials.username, password: 'wrong-password' },
+        })
+        statuses.push(response.statusCode)
+      }
+      expect(
+        statuses.filter((status) => status === 429).length,
+        `a rotating cookie defeated the login throttle: ${statuses.join(',')}`,
+      ).toBeGreaterThan(0)
+    }, 30_000)
+
     it('the throttle refuses even a correct password', async () => {
       // Otherwise the limit only slows down the guesses that were going to fail.
       const response = await raw({

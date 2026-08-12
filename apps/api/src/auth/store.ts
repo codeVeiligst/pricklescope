@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 
-import type { AuthMethod, Role, User } from '@pricklescope/contracts'
+import { ROLE_ORDER, type AuthMethod, type Role, type User } from '@pricklescope/contracts'
 import type { Database } from '@pricklescope/db'
 import type { Kysely, Transaction } from 'kysely'
 
@@ -45,6 +45,16 @@ export interface OidcProfile {
   displayName: string
   email: string | null
   role: Role
+  /**
+   * Whether the provider's groups govern the role on every login.
+   *
+   * False when no group is mapped, and that case matters: `roleFromOidcClaims`
+   * returns `viewer` when it has nothing to match on, so synchronising
+   * unconditionally would demote every OIDC user to viewer the next time they
+   * signed in — on installations that map no groups and set roles by hand, which
+   * is a supported way to run this.
+   */
+  roleFromProvider: boolean
   claims: Record<string, unknown>
 }
 
@@ -313,6 +323,48 @@ export class AuthStore {
     })
   }
 
+  /**
+   * What an existing OIDC user's role should become on this login.
+   *
+   * Refuses to demote the last active administrator. An identity provider
+   * misconfiguration would otherwise lock every administrator out of the
+   * controller at once, with no local account left to repair it — the same
+   * reasoning as the self-demotion guard in the user service, applied to a
+   * change that arrives from outside.
+   */
+  private async roleForExistingUser(
+    transaction: Transaction<Database>,
+    profile: OidcProfile,
+    existing: { id: string; role: Role },
+  ): Promise<Role> {
+    if (!profile.roleFromProvider || profile.role === existing.role) return existing.role
+    const demotion = ROLE_ORDER[profile.role] < ROLE_ORDER[existing.role]
+    if (!demotion || existing.role !== 'administrator') return profile.role
+
+    const others = await transaction
+      .selectFrom('users')
+      .select('id')
+      .where('role', '=', 'administrator')
+      .where('active', '=', true)
+      .where('id', '!=', existing.id)
+      .forUpdate()
+      .execute()
+    if (others.length > 0) return profile.role
+
+    await this.writeAudit(
+      {
+        actorUserId: existing.id,
+        action: 'auth.oidc.role_synchronisation_refused',
+        resourceType: 'user',
+        resourceId: existing.id,
+        outcome: 'failure',
+        metadata: { from: existing.role, to: profile.role, reason: 'last_administrator' },
+      },
+      transaction,
+    )
+    return existing.role
+  }
+
   async findOrCreateOidcUser(profile: OidcProfile, allowCreate: boolean): Promise<User | null> {
     return this.db.transaction().execute(async (transaction) => {
       const existing = await transaction
@@ -338,17 +390,40 @@ export class AuthStore {
           .set({ email: profile.email, claims: profile.claims, updated_at: new Date() })
           .where('id', '=', existing.identity_id)
           .execute()
+
+        // The provider's groups decide the role on every login, not only at
+        // creation. Without this a user removed from the administrator group
+        // kept administrator here indefinitely, which is the opposite of what
+        // central identity management is for.
+        const role = await this.roleForExistingUser(transaction, profile, existing)
         await transaction
           .updateTable('users')
           .set({
             display_name: profile.displayName,
             email: profile.email,
+            role,
             last_login_at: new Date(),
             updated_at: new Date(),
           })
           .where('id', '=', existing.id)
           .execute()
-        return toUser(transaction, existing)
+        if (role !== existing.role) {
+          await this.writeAudit(
+            {
+              actorUserId: existing.id,
+              action: 'auth.oidc.role_synchronised',
+              resourceType: 'user',
+              resourceId: existing.id,
+              outcome: 'success',
+              metadata: { from: existing.role, to: role, issuer: profile.issuer },
+            },
+            transaction,
+          )
+        }
+        // The session table joins `users` on every request, so a demotion takes
+        // effect on the next request rather than at the next sign-in. Existing
+        // sessions do not need revoking.
+        return toUser(transaction, { ...existing, role })
       }
 
       if (!allowCreate) return null
