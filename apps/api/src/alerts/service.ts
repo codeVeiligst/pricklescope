@@ -569,6 +569,7 @@ export class AlertService {
             deliveryToken: bundle.deliveryToken ?? null,
           }),
           await this.grafanaStore.remoteUid(`contact-${contact.id}`),
+          await this.grafanaStore.hasResource(`contact-${contact.id}`),
         )
         if (written.adopted) {
           await this.audit.writeAudit({

@@ -6,13 +6,20 @@ Revised: 2026-08-10 — three of this report's gaps existed only because the pro
 was not yet a Git repository and had no CI. Milestone 11 supplied both, so the
 commit-history secret scan, the CI review, and the tested-commit record are now
 filled in rather than deferred. Each is marked **Revised 2026-08-10** below.
-Tested commit: `b87c499`, released as `v0.1.1`
-(`ghcr.io/codeveiligst/pricklescope/api@sha256:33bb8dd4…`,
-`web@sha256:f8188615…`).
-Scope: the PrickleScope controller — its API, its collector pipeline, its browser
-application, and the container stack it ships with.
-Companion to [threat-model.md](threat-model.md), which is the threat model this verifies
-against.
+Tested commit: `b87c499`, released as `v0.1.1`, images
+`ghcr.io/codeveiligst/pricklescope/api@sha256:33bb8dd4…` and
+`web@sha256:f8188615…`.
+
+> **That commit no longer resolves.** The history was rewritten on 2026-08-11 to
+> purge a file committed by mistake, so every commit before 0.1.2 was renumbered.
+> The evidence below was gathered against that tree and the images it produced are
+> still in the registry and still verifiable — but the commit their provenance
+> names is gone. Provenance for 0.1.0 and 0.1.1 is **permanently incomplete**, and
+> the history will not be rewritten again.
+> Scope: the PrickleScope controller — its API, its collector pipeline, its browser
+> application, and the container stack it ships with.
+> Companion to [threat-model.md](threat-model.md), which is the threat model this verifies
+> against.
 
 A verification report is only worth the evidence behind it. Every claim below
 names the check that produced it, and the checks are all runnable.

@@ -123,6 +123,22 @@ export class GrafanaStore {
     await this.db.deleteFrom('managed_grafana_resources').where('uid', '=', uid).execute()
   }
 
+  /**
+   * Whether this controller has a record of writing the resource before.
+   *
+   * The difference between "ours, from before uids were recorded" and "not ours
+   * at all" — which is what decides whether adopting a same-named remote is a
+   * migration or a hijack.
+   */
+  async hasResource(uid: string): Promise<boolean> {
+    const row = await this.db
+      .selectFrom('managed_grafana_resources')
+      .select('uid')
+      .where('uid', '=', uid)
+      .executeTakeFirst()
+    return row !== undefined
+  }
+
   /** The uid Grafana holds a managed resource under, or null if never recorded. */
   async remoteUid(uid: string): Promise<string | null> {
     const row = await this.db

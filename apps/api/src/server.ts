@@ -9,8 +9,19 @@ app.log.info({ config: redactConfig(runtime.config) }, 'Loaded PrickleScope conf
 
 const shutdown = async (signal: string): Promise<void> => {
   app.log.info({ signal }, 'Stopping PrickleScope API')
-  await app.close()
-  await runtime.metadata.destroy()
+  // Each step is attempted even if an earlier one fails, and a failure here
+  // cannot become an unhandled rejection: these run from a signal handler, with
+  // no caller to catch them. Shutting down badly should still shut down.
+  try {
+    await app.close()
+  } catch (error) {
+    app.log.error({ err: error }, 'the HTTP server did not close cleanly')
+  }
+  try {
+    await runtime.metadata.destroy()
+  } catch (error) {
+    app.log.error({ err: error }, 'the metadata pool did not close cleanly')
+  }
 }
 
 process.once('SIGINT', () => void shutdown('SIGINT'))

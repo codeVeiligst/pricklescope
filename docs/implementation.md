@@ -55,10 +55,13 @@ disclosure, the licence is AGPL-3.0, and both startup workflows exist — the
 production one refusing to start on a development password or the published
 encryption key.
 
-Milestone 8 is in progress. Seven of eleven items are verified complete: the
-threat model, secure-cookie and HTTPS behaviour against a production-like origin,
-the vulnerability scans, the sub-400px audit, tested restore procedures, and —
-closed in Milestone 10 — upgrade documentation and deployment sizing. Building
+Milestone 8 has one item left: task-based usability testing. The accessibility
+audit was dropped from scope rather than deferred (D-043), and alerting on the
+controller's own health closed on 2026-08-11 (D-041, D-042). Everything else is
+verified complete: the threat model, secure-cookie and HTTPS behaviour against a
+production-like origin, the vulnerability scans, the sub-400px audit, tested
+restore procedures, end-to-end coverage, and — closed in Milestone 10 — upgrade
+documentation and deployment sizing. Building
 the origin required the same-origin production gateway (D-032), so that is now an
 artifact rather than an open selection. Four items remain: health dashboards and
 alerts, end-to-end coverage of the primary journeys, the accessibility audit, and
@@ -1408,7 +1411,7 @@ Two things remain partial, and one is a judgement worth recording:
   `pull_request` and branch protection requires its four checks; that stays
   partial until a pull request actually runs them.
 
-## Unreleased, on `main` after 0.1.1
+## Unreleased, on `main` after 0.1.2
 
 - **An external audit (2026-08-11) found fifteen issues; see
   [external-audit.md](external-audit.md).** What was fixed, disputed, and

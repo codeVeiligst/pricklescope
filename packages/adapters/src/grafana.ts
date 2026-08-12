@@ -248,6 +248,14 @@ export class GrafanaApiClient {
   async upsertContactPoint(
     definition: Record<string, unknown>,
     knownUid?: string | null,
+    /**
+     * Whether the caller has a record of having written this contact point
+     * before. Only then may a same-named remote be adopted — that is a resource
+     * created before uids were recorded. Without a record, a same-named remote
+     * belongs to somebody else and taking it over is the abuse the audit
+     * described, so the write is refused instead.
+     */
+    previouslyWritten = false,
   ): Promise<{ uid: string | null; adopted: boolean }> {
     let uid = knownUid ?? null
     let adopted = false
@@ -257,6 +265,13 @@ export class GrafanaApiClient {
     }
     if (!uid) {
       const sameName = (await this.contactPoints()).find((item) => item.name === definition.name)
+      if (sameName && !previouslyWritten) {
+        throw new Error(
+          `Grafana already has a contact point named "${String(definition.name)}" that this ` +
+            'controller did not create. Rename one of them; PrickleScope will not take over a ' +
+            'contact point it has no record of writing.',
+        )
+      }
       uid = typeof sameName?.uid === 'string' ? sameName.uid : null
       adopted = uid !== null
     }

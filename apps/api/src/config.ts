@@ -189,7 +189,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
 
   const config: AppConfig = {
     environment,
-    version: optional(env.PRICKLESCOPE_VERSION) ?? '0.1.0',
+    // Only reached when PRICKLESCOPE_VERSION is unset, which is development and
+    // tests. Naming a real released version there made a dev build claim to be
+    // one; `0.0.0-dev` cannot be mistaken for anything published.
+    version: optional(env.PRICKLESCOPE_VERSION) ?? '0.0.0-dev',
     host: optional(env.PRICKLESCOPE_HOST) ?? 'localhost',
     port: integerValue(env.PRICKLESCOPE_API_PORT, 3001, 'PRICKLESCOPE_API_PORT', 1, 65_535),
     appOrigin,

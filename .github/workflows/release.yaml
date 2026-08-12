@@ -26,6 +26,13 @@ jobs:
   gate:
     name: Release gate
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      # Reading another workflow's run conclusion needs this, and the workflow
+      # default of `contents: read` alone does not grant it. Without it the gate
+      # step below fails closed and no release can ever publish — found by the
+      # audit's second pass, before it had a chance to block a real tag.
+      actions: read
     services:
       postgres:
         image: postgres:17.10-alpine@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193

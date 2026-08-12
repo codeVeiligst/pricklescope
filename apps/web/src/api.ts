@@ -1,3 +1,7 @@
+import { StorageOverviewSchema, SyncStatusSchema } from '@pricklescope/contracts'
+import { Value } from '@sinclair/typebox/value'
+import type { TSchema } from '@sinclair/typebox'
+
 import type {
   ApiError,
   AuthProviders,
@@ -55,6 +59,36 @@ export class ApiClientError extends Error {
     super(message)
     this.name = 'ApiClientError'
   }
+}
+
+/**
+ * Checks a response against the schema the server serialises it with, for the
+ * few answers a person acts on irreversibly (audit F15).
+ *
+ * Not every response. The server serialises against these same schemas, so
+ * validating everything would mostly re-prove what the API already guarantees
+ * while adding weight to a bundle that is already large. The failure worth
+ * catching is version skew — a cached bundle against a newer API — and it only
+ * matters where a wrong number changes what someone destroys: retention, which
+ * drops data when shortened, and the sync status, which says what "apply" is
+ * about to rewrite.
+ *
+ * The schema comes from `@pricklescope/contracts`, so there is one definition
+ * rather than a hand-written guard that has to be kept in step with it.
+ */
+async function checked<T>(schema: TSchema, response: Promise<unknown>): Promise<T> {
+  const body = await response
+  if (!Value.Check(schema, body)) {
+    const [first] = [...Value.Errors(schema, body)]
+    throw new ApiClientError(
+      500,
+      'response_unexpected',
+      `The server answered in a shape this version does not understand${
+        first ? ` (${first.path || '/'}: ${first.message})` : ''
+      }. Reload to pick up a newer application.`,
+    )
+  }
+  return body as T
 }
 
 async function apiRequest<T>(
@@ -160,7 +194,7 @@ export const api = {
       { method: 'POST' },
       csrfToken,
     ),
-  storage: () => apiRequest<StorageOverview>('/api/v1/storage'),
+  storage: () => checked<StorageOverview>(StorageOverviewSchema, apiRequest('/api/v1/storage')),
   updateStoragePolicy: (request: UpdateStoragePolicyRequest, csrfToken: string) =>
     apiRequest<Job>(
       '/api/v1/storage/policy',
@@ -219,7 +253,7 @@ export const api = {
     ),
   reconcileAlerts: (csrfToken: string) =>
     apiRequest<Job>('/api/v1/alerts/reconcile', { method: 'POST' }, csrfToken),
-  syncStatus: () => apiRequest<SyncStatus>('/api/v1/sync'),
+  syncStatus: () => checked<SyncStatus>(SyncStatusSchema, apiRequest('/api/v1/sync')),
   applySync: (csrfToken: string) =>
     apiRequest<SyncApplyResult>('/api/v1/sync/apply', { method: 'POST' }, csrfToken),
   fleetGraphs: () => apiRequest<FleetGraphs>('/api/v1/graphs/fleet'),

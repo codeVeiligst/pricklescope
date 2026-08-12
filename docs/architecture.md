@@ -156,7 +156,9 @@ The accepted initial application stack is:
 - **A same-origin web gateway** that serves the SPA and routes `/api` to Fastify
   and authenticated `/grafana` requests to Grafana.
 
-The browser talks only to the same-origin application and embedded Grafana route.
+The browser talks only to the same-origin application, including the `/grafana`
+route the API proxies. Grafana is never embedded in a PrickleScope page (D-019);
+reaching it means navigating to it through that same-origin path.
 Fastify owns all infrastructure adapters. QuestDB queries use its PostgreSQL wire
 protocol through a standard Node PostgreSQL client because that path supports bind
 parameters. Its REST `/exec` API is reserved for narrowly documented operations
@@ -240,7 +242,7 @@ Initial roles are deliberately small:
 
 | Role          | Initial capability                                                                    |
 | ------------- | ------------------------------------------------------------------------------------- |
-| Viewer        | View inventory, health, alerts, and embedded graphs                                   |
+| Viewer        | View inventory, health, alerts, and the graphs PrickleScope draws                     |
 | Operator      | Viewer access plus manage sources, checks, inventory jobs, and alerts                 |
 | Administrator | Operator access plus users, authentication, credentials, storage, and system settings |
 
